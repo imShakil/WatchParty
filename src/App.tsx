@@ -26,6 +26,8 @@ export function App() {
     reactions,
     isPeerBuffering,
     bufferingPeerName,
+    remoteStream,
+    broadcastLocalStream,
     videoRef,
     playerControllerRef,
     triggerReaction,
@@ -144,6 +146,9 @@ export function App() {
             posterUrl={roomMetadata.posterUrl}
             isHost={isHost}
             isHostOnlyControl={roomMetadata.isHostOnlyControl}
+            isP2PStream={roomMetadata.isP2PStream}
+            remoteStream={remoteStream}
+            onBroadcastLocalStream={broadcastLocalStream}
             videoRef={videoRef}
             controllerRef={playerControllerRef}
             onPlay={handlePlayerPlay}
@@ -194,7 +199,7 @@ export function App() {
         currentUrl={roomMetadata.streamUrl}
         currentTitle={roomMetadata.roomTitle}
         onClose={() => setIsStreamModalOpen(false)}
-        onSaveStream={(url, title) => changeStream(url, title)}
+        onSaveStream={(url, title, isP2P) => changeStream(url, title, undefined, isP2P)}
       />
 
       {/* Change Name Modal */}

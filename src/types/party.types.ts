@@ -60,6 +60,7 @@ export interface RoomMetadata {
   posterUrl?: string
   isHostOnlyControl: boolean
   hostId: string
+  isP2PStream?: boolean
 }
 
 export interface PartyPacket<T = unknown> {

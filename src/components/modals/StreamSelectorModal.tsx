@@ -6,7 +6,7 @@ interface StreamSelectorModalProps {
   currentUrl: string
   currentTitle: string
   onClose: () => void
-  onSaveStream: (url: string, title: string) => void
+  onSaveStream: (url: string, title: string, isP2P?: boolean) => void
 }
 
 const PRESET_STREAMS = [
@@ -50,7 +50,7 @@ export const StreamSelectorModal: React.FC<StreamSelectorModalProps> = ({
   const handleApplyUrl = (e: React.FormEvent) => {
     e.preventDefault()
     if (!streamUrl.trim()) return
-    onSaveStream(streamUrl.trim(), title.trim() || 'Watch Party Stream')
+    onSaveStream(streamUrl.trim(), title.trim() || 'Watch Party Stream', false)
     onClose()
   }
 
@@ -72,7 +72,7 @@ export const StreamSelectorModal: React.FC<StreamSelectorModalProps> = ({
 
   const handleApplyLocalFile = () => {
     if (!streamUrl) return
-    onSaveStream(streamUrl, title || selectedFileName || 'Local Movie')
+    onSaveStream(streamUrl, title || selectedFileName || 'Local Video', true)
     onClose()
   }
 
@@ -307,9 +307,29 @@ export const StreamSelectorModal: React.FC<StreamSelectorModalProps> = ({
                   {selectedFileName ? selectedFileName : 'Choose a Video File from your device'}
                 </div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '0.25rem' }}>
-                  Supports MP4, WebM, MKV, MOV • Zero server upload • Instant 4K playback
+                  Supports MP4, WebM, MKV, MOV • Zero server upload
                 </div>
               </div>
+            </div>
+
+            {/* P2P Live Broadcast Notice */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.6rem',
+                padding: '0.65rem 0.85rem',
+                borderRadius: 'var(--radius-md)',
+                background: 'rgba(16, 185, 129, 0.1)',
+                border: '1px solid rgba(16, 185, 129, 0.25)',
+                fontSize: '0.775rem',
+                color: '#6ee7b7',
+              }}
+            >
+              <Sparkles size={16} color="#10b981" />
+              <span>
+                <strong>Live P2P Broadcast:</strong> Plays directly from your device and streams to all party guests in real time via encrypted WebRTC.
+              </span>
             </div>
 
             {selectedFileName && (
@@ -342,7 +362,7 @@ export const StreamSelectorModal: React.FC<StreamSelectorModalProps> = ({
               className="btn-action btn-primary"
               style={{ width: '100%', justifyContent: 'center', padding: '0.75rem' }}
             >
-              <span>Play Local Movie</span>
+              <span>Broadcast Video to Party</span>
               <PlayCircle size={16} />
             </button>
           </div>

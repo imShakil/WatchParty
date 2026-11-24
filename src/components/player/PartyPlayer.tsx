@@ -14,6 +14,8 @@ import {
   RotateCw,
   Loader2,
   Lock,
+  Radio,
+  Wifi,
 } from 'lucide-react'
 
 interface PartyPlayerProps {
@@ -21,6 +23,9 @@ interface PartyPlayerProps {
   posterUrl?: string
   isHost: boolean
   isHostOnlyControl: boolean
+  isP2PStream?: boolean
+  remoteStream?: MediaStream | null
+  onBroadcastLocalStream?: (stream: MediaStream) => void
   videoRef: React.RefObject<HTMLVideoElement | null>
   controllerRef?: React.MutableRefObject<UnifiedPlayerRef | null>
   onPlay: () => void
@@ -45,6 +50,9 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
   posterUrl,
   isHost,
   isHostOnlyControl,
+  isP2PStream,
+  remoteStream,
+  onBroadcastLocalStream,
   videoRef,
   controllerRef,
   onPlay,
@@ -63,6 +71,14 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
   const [isBuffering, setIsBuffering] = useState<boolean>(false)
   const [showControls, setShowControls] = useState<boolean>(true)
   const hideControlsTimer = useRef<number | null>(null)
+  const guestVideoRef = useRef<HTMLVideoElement | null>(null)
+
+  useEffect(() => {
+    if (guestVideoRef.current && remoteStream) {
+      guestVideoRef.current.srcObject = remoteStream
+      guestVideoRef.current.play().catch(() => {})
+    }
+  }, [remoteStream])
 
   const parsedMedia = useMemo(() => parseMediaUrl(streamUrl), [streamUrl])
   const { normalizedUrl, isEmbed, isYouTube, youtubeId } = parsedMedia
@@ -117,7 +133,31 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
     const video = videoRef.current
     if (!video) return
 
-    const handlePlay = () => setIsPlaying(true)
+    const captureStreamAndBroadcast = () => {
+      if (isHost && isP2PStream && onBroadcastLocalStream) {
+        try {
+          const vid = video as HTMLVideoElement & {
+            captureStream?: () => MediaStream
+            mozCaptureStream?: () => MediaStream
+          }
+          const captured = vid.captureStream
+            ? vid.captureStream()
+            : vid.mozCaptureStream
+            ? vid.mozCaptureStream()
+            : null
+          if (captured) {
+            onBroadcastLocalStream(captured)
+          }
+        } catch (err) {
+          console.warn('captureStream error:', err)
+        }
+      }
+    }
+
+    const handlePlay = () => {
+      setIsPlaying(true)
+      captureStreamAndBroadcast()
+    }
     const handlePause = () => setIsPlaying(false)
     const handleTimeUpdate = () => {
       setCurrentTime(video.currentTime)
@@ -128,6 +168,7 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
     }
     const handleLoadedMetadata = () => {
       setDuration(video.duration || 0)
+      captureStreamAndBroadcast()
     }
     const handleWaiting = () => {
       setIsBuffering(true)
@@ -155,7 +196,7 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
       video.removeEventListener('playing', handleCanPlay)
       video.removeEventListener('canplay', handleCanPlay)
     }
-  }, [videoRef, onBuffering])
+  }, [videoRef, onBuffering, isHost, isP2PStream, onBroadcastLocalStream])
 
   // Controls Visibility management
   const triggerUserActivity = useCallback(() => {
@@ -307,6 +348,55 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
             onTimeUpdate={handleYouTubeTimeUpdate}
           />
         </div>
+      ) : isP2PStream && !isHost ? (
+        <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+          {remoteStream ? (
+            <video
+              ref={guestVideoRef}
+              autoPlay
+              playsInline
+              style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }}
+            />
+          ) : (
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '1rem',
+                background: '#08090c',
+                padding: '2rem',
+                textAlign: 'center',
+              }}
+            >
+              <div
+                style={{
+                  width: '60px',
+                  height: '60px',
+                  borderRadius: '50%',
+                  background: 'rgba(234, 56, 62, 0.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: '1px solid rgba(234, 56, 62, 0.35)',
+                }}
+              >
+                <Radio size={28} color="#ea383e" className="spin" />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.4rem' }}>
+                  Connecting to Host's Live Video Stream...
+                </h3>
+                <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)', maxWidth: '420px', lineHeight: 1.5 }}>
+                  The host is streaming a local video file directly via encrypted WebRTC peer-to-peer. Video will appear here as soon as the host hits play.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
       ) : isEmbed ? (
         <iframe
           src={normalizedUrl}
@@ -382,6 +472,32 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
             >
               <Lock size={12} color="#f59e0b" />
               <span>Host Controls Only</span>
+            </div>
+          )}
+
+          {/* P2P Live Broadcast Badge */}
+          {isP2PStream && (
+            <div
+              style={{
+                position: 'absolute',
+                top: '1rem',
+                right: '1rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.45rem',
+                padding: '0.35rem 0.8rem',
+                borderRadius: 'var(--radius-full)',
+                background: isHost ? 'rgba(234, 56, 62, 0.25)' : 'rgba(16, 185, 129, 0.25)',
+                border: `1px solid ${isHost ? 'rgba(234, 56, 62, 0.5)' : 'rgba(16, 185, 129, 0.5)'}`,
+                color: isHost ? '#fca5a5' : '#6ee7b7',
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                backdropFilter: 'blur(12px)',
+                zIndex: 35,
+              }}
+            >
+              <Wifi size={13} color={isHost ? '#ea383e' : '#10b981'} />
+              <span>{isHost ? 'Broadcasting Local Video' : 'Live P2P Stream'}</span>
             </div>
           )}
 

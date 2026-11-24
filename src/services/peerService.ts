@@ -1,4 +1,4 @@
-import Peer, { type DataConnection } from 'peerjs'
+import Peer, { type DataConnection, type MediaConnection } from 'peerjs'
 import type { PartyPacket } from '@/types/party.types'
 
 export type PeerEventHandler = (packet: PartyPacket) => void
@@ -8,6 +8,7 @@ export type PeerStatusHandler = (
 ) => void
 export type PeerConnectionListHandler = (peerIds: string[]) => void
 export type GuestConnectedHandler = (guestPeerId: string) => void
+export type RemoteStreamHandler = (stream: MediaStream) => void
 
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -19,6 +20,8 @@ export class PeerService {
   private peer: Peer | null = null
   private hostConnection: DataConnection | null = null
   private guestConnections: Map<string, DataConnection> = new Map()
+  private mediaCalls: Map<string, MediaConnection> = new Map()
+  private activeLocalStream: MediaStream | null = null
 
   public myPeerId: string = ''
   public isHost: boolean = false
@@ -27,6 +30,7 @@ export class PeerService {
   private statusListeners: Set<PeerStatusHandler> = new Set()
   private peerListListeners: Set<PeerConnectionListHandler> = new Set()
   private guestConnectedListeners: Set<GuestConnectedHandler> = new Set()
+  private remoteStreamListeners: Set<RemoteStreamHandler> = new Set()
 
   /**
    * Initialize a host peer with optional custom room ID and retry mechanism for reloads
@@ -91,6 +95,14 @@ export class PeerService {
         this.connectToHost(hostId, resolve, reject)
       })
 
+      // Guest answers incoming live media streams from host
+      peerInstance.on('call', (mediaConn) => {
+        mediaConn.answer() // Answer with no outbound media track
+        mediaConn.on('stream', (remoteStream) => {
+          this.notifyRemoteStream(remoteStream)
+        })
+      })
+
       peerInstance.on('error', (err) => {
         this.notifyStatus('error', err.message || 'Peer connection error')
         reject(err)
@@ -147,6 +159,24 @@ export class PeerService {
       this.guestConnections.set(conn.peer, conn)
       this.notifyPeerList(Array.from(this.guestConnections.keys()))
       this.notifyGuestConnected(conn.peer)
+
+      // If host is currently broadcasting a local video stream, call this new guest
+      if (this.activeLocalStream && this.peer) {
+        try {
+          const call = this.peer.call(conn.peer, this.activeLocalStream)
+          if (call) {
+            this.mediaCalls.set(conn.peer, call)
+            call.on('close', () => {
+              this.mediaCalls.delete(conn.peer)
+            })
+            call.on('error', () => {
+              this.mediaCalls.delete(conn.peer)
+            })
+          }
+        } catch (err) {
+          console.error(`Failed to initiate media call to guest ${conn.peer}:`, err)
+        }
+      }
     }
 
     if (conn.open) {
@@ -162,11 +192,29 @@ export class PeerService {
     })
 
     conn.on('close', () => {
+      const call = this.mediaCalls.get(conn.peer)
+      if (call) {
+        try {
+          call.close()
+        } catch {
+          // ignore
+        }
+        this.mediaCalls.delete(conn.peer)
+      }
       this.guestConnections.delete(conn.peer)
       this.notifyPeerList(Array.from(this.guestConnections.keys()))
     })
 
     conn.on('error', () => {
+      const call = this.mediaCalls.get(conn.peer)
+      if (call) {
+        try {
+          call.close()
+        } catch {
+          // ignore
+        }
+        this.mediaCalls.delete(conn.peer)
+      }
       this.guestConnections.delete(conn.peer)
       this.notifyPeerList(Array.from(this.guestConnections.keys()))
     })
@@ -275,7 +323,66 @@ export class PeerService {
     }
   }
 
+  public broadcastStream(stream: MediaStream): void {
+    this.activeLocalStream = stream
+    if (!this.peer || !this.isHost) return
+
+    for (const guestId of this.guestConnections.keys()) {
+      const existingCall = this.mediaCalls.get(guestId)
+      if (existingCall) {
+        try {
+          existingCall.close()
+        } catch {
+          // ignore
+        }
+      }
+
+      try {
+        const call = this.peer.call(guestId, stream)
+        if (call) {
+          this.mediaCalls.set(guestId, call)
+          call.on('close', () => {
+            this.mediaCalls.delete(guestId)
+          })
+          call.on('error', () => {
+            this.mediaCalls.delete(guestId)
+          })
+        }
+      } catch (err) {
+        console.error(`Failed to call peer ${guestId} with stream:`, err)
+      }
+    }
+  }
+
+  public stopStream(): void {
+    this.activeLocalStream = null
+    for (const call of this.mediaCalls.values()) {
+      try {
+        call.close()
+      } catch {
+        // ignore
+      }
+    }
+    this.mediaCalls.clear()
+  }
+
+  public onRemoteStream(listener: RemoteStreamHandler): () => void {
+    this.remoteStreamListeners.add(listener)
+    return () => {
+      this.remoteStreamListeners.delete(listener)
+    }
+  }
+
+  private notifyRemoteStream(stream: MediaStream): void {
+    for (const listener of this.remoteStreamListeners) {
+      listener(stream)
+    }
+  }
+
   public cleanup(): void {
+    this.stopStream()
+    this.remoteStreamListeners.clear()
+
     if (this.hostConnection) {
       this.hostConnection.close()
       this.hostConnection = null

@@ -45,6 +45,7 @@ export function useWatchParty() {
   const [reactions, setReactions] = useState<ReactionItem[]>([])
   const [isPeerBuffering, setIsPeerBuffering] = useState<boolean>(false)
   const [bufferingPeerName, setBufferingPeerName] = useState<string>('')
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null)
 
   // Video Player Ref & Synchronization State
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -230,13 +231,19 @@ export function useWatchParty() {
 
   // Change Stream URL
   const changeStream = useCallback(
-    (streamUrl: string, title?: string, poster?: string) => {
-      const parsed = parseMediaUrl(streamUrl, title)
+    (streamUrl: string, title?: string, poster?: string, isP2P?: boolean) => {
+      if (!isP2P) {
+        peerService.stopStream()
+        setRemoteStream(null)
+      }
+
+      const parsed = isP2P ? { normalizedUrl: streamUrl, title } : parseMediaUrl(streamUrl, title)
       const newMeta: RoomMetadata = {
         ...roomMetadata,
         streamUrl: parsed.normalizedUrl,
         roomTitle: title || parsed.title || roomMetadata.roomTitle,
         posterUrl: poster || roomMetadata.posterUrl,
+        isP2PStream: isP2P,
       }
       setRoomMetadata(newMeta)
       if (isHost && newMeta.roomId) {
@@ -253,6 +260,10 @@ export function useWatchParty() {
     },
     [roomMetadata, userName, addSystemNotice, isHost]
   )
+
+  const broadcastLocalStream = useCallback((stream: MediaStream) => {
+    peerService.broadcastStream(stream)
+  }, [])
 
   // Toggle host only control mode
   const toggleHostOnlyControl = useCallback(() => {
@@ -404,6 +415,9 @@ export function useWatchParty() {
         case 'HOST_CHANGE_STREAM': {
           const meta = packet.payload as RoomMetadata
           setRoomMetadata(meta)
+          if (!meta.isP2PStream) {
+            setRemoteStream(null)
+          }
           addSystemNotice(`Host loaded a new stream: ${meta.roomTitle || 'Media'}`)
           break
         }
@@ -636,13 +650,19 @@ export function useWatchParty() {
       })
     })
 
+    const unsubStream = peerService.onRemoteStream((stream) => {
+      setRemoteStream(stream)
+      addSystemNotice('Connected to live P2P video stream from host')
+    })
+
     return () => {
       unsubMsg()
       unsubStatus()
       unsubPeers()
       unsubGuest()
+      unsubStream()
     }
-  }, [handleIncomingPacket, userName, isHost, roomMetadata, getIsPlayingState, getCurrentPlaybackTime])
+  }, [handleIncomingPacket, userName, isHost, roomMetadata, getIsPlayingState, getCurrentPlaybackTime, addSystemNotice])
 
   // Host heartbeat interval to keep guests in sync
   useEffect(() => {
@@ -692,6 +712,8 @@ export function useWatchParty() {
     reactions,
     isPeerBuffering,
     bufferingPeerName,
+    remoteStream,
+    broadcastLocalStream,
     videoRef,
     playerControllerRef,
     triggerReaction,
