@@ -137,7 +137,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const handleQuickStartParty = useCallback(
     (item: FeaturedTitle) => {
       onSaveName(name.trim() || userName)
-      const slug = `${item.id}-${item.streamUrl.slice(-6).replace(/[^a-z0-9_-]/g, '')}`
+      const cleanSlug = item.id.toLowerCase().replace(/[^a-z0-9]/g, '')
+      const randSuffix = Math.random().toString(36).substring(2, 6)
+      const slug = `dpwp-${cleanSlug}-${randSuffix}`
       onHostParty(item.streamUrl, `${item.title} Watch Party`, slug, item.poster)
     },
     [name, userName, onSaveName, onHostParty]

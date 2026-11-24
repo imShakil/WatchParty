@@ -2,7 +2,13 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import confetti from 'canvas-confetti'
 import { peerService } from '@/services/peerService'
 import { parseMediaUrl } from '@/utils/mediaUrl'
-import { saveHostSession, clearHostSession } from '@/utils/sessionUtils'
+import { parseCurrentRoute } from '@/utils/routeUtils'
+import {
+  saveHostSession,
+  clearHostSession,
+  saveRoomChat,
+  getRoomChat,
+} from '@/utils/sessionUtils'
 import type { UnifiedPlayerRef } from '@/types/player.types'
 import type {
   ChatMessage,
@@ -41,11 +47,37 @@ export function useWatchParty() {
 
   // Participants & Chat
   const [participants, setParticipants] = useState<Participant[]>([])
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    if (typeof window === 'undefined') return []
+    const route = parseCurrentRoute()
+    return route.roomId ? getRoomChat(route.roomId) : []
+  })
   const [reactions, setReactions] = useState<ReactionItem[]>([])
   const [isPeerBuffering, setIsPeerBuffering] = useState<boolean>(false)
   const [bufferingPeerName, setBufferingPeerName] = useState<string>('')
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null)
+
+  const roomIdRef = useRef<string>(roomId)
+  const messagesRef = useRef<ChatMessage[]>([])
+
+  useEffect(() => {
+    roomIdRef.current = roomId
+  }, [roomId])
+
+  useEffect(() => {
+    messagesRef.current = messages
+  }, [messages])
+
+  const appendMessage = useCallback((msg: ChatMessage) => {
+    setMessages((prev) => {
+      if (prev.some((m) => m.id === msg.id)) return prev
+      const next = [...prev, msg]
+      if (roomIdRef.current) {
+        saveRoomChat(roomIdRef.current, next)
+      }
+      return next
+    })
+  }, [])
 
   // Video Player Ref & Synchronization State
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -139,7 +171,7 @@ export function useWatchParty() {
         isHost,
       }
 
-      setMessages((prev) => [...prev, msg])
+      appendMessage(msg)
 
       peerService.send({
         type: 'CHAT_MESSAGE',
@@ -148,23 +180,23 @@ export function useWatchParty() {
         payload: msg,
       })
     },
-    [userName, isHost]
+    [userName, isHost, appendMessage]
   )
 
   // Send System Notice
-  const addSystemNotice = useCallback((text: string) => {
-    setMessages((prev) => [
-      ...prev,
-      {
+  const addSystemNotice = useCallback(
+    (text: string) => {
+      appendMessage({
         id: `sys-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
         senderId: 'system',
         senderName: 'System',
         text,
         timestamp: Date.now(),
         isSystem: true,
-      },
-    ])
-  }, [])
+      })
+    },
+    [appendMessage]
+  )
 
   // Broadcast player controls
   const handlePlayerPlay = useCallback(() => {
@@ -290,7 +322,7 @@ export function useWatchParty() {
       switch (packet.type) {
         case 'CHAT_MESSAGE': {
           const msg = packet.payload as ChatMessage
-          setMessages((prev) => [...prev, msg])
+          appendMessage(msg)
           break
         }
 
@@ -469,6 +501,7 @@ export function useWatchParty() {
                   currentTime: getCurrentPlaybackTime(),
                 },
                 hostName: userName,
+                chatHistory: messagesRef.current.slice(-50),
               },
             })
           }
@@ -480,8 +513,20 @@ export function useWatchParty() {
             roomMetadata: RoomMetadata
             currentState: { isPlaying: boolean; currentTime: number }
             hostName?: string
+            chatHistory?: ChatMessage[]
           }
           setRoomMetadata(ack.roomMetadata)
+          if (ack.chatHistory && ack.chatHistory.length > 0) {
+            setMessages((prev) => {
+              const existingIds = new Set(prev.map((m) => m.id))
+              const toAdd = ack.chatHistory!.filter((m) => !existingIds.has(m.id))
+              const merged = [...prev, ...toAdd].sort((a, b) => a.timestamp - b.timestamp)
+              if (roomIdRef.current) {
+                saveRoomChat(roomIdRef.current, merged)
+              }
+              return merged
+            })
+          }
           const hostDisplayName = ack.hostName || packet.senderName
           participantNamesRef.current[packet.senderId] = hostDisplayName
           setParticipants((prev) =>
@@ -506,9 +551,20 @@ export function useWatchParty() {
           }
           break
         }
+
+        case 'ROOM_CLOSED': {
+          addSystemNotice('The host has ended this watch party.')
+          peerService.cleanup()
+          setConnectionStatus('disconnected')
+          setErrorMessage('The host has ended the watch party.')
+          setTimeout(() => {
+            window.location.href = '/'
+          }, 2500)
+          break
+        }
       }
     },
-    [isHost, userName, roomMetadata, addSystemNotice, getCurrentPlaybackTime, getIsPlayingState]
+    [isHost, userName, roomMetadata, addSystemNotice, getCurrentPlaybackTime, getIsPlayingState, appendMessage]
   )
 
   // Start Hosting
@@ -525,6 +581,11 @@ export function useWatchParty() {
         setRoomId(id)
         setIsHost(true)
         setConnectionStatus('connected')
+
+        const cached = getRoomChat(id)
+        if (cached.length > 0) {
+          setMessages(cached)
+        }
 
         const parsed = parseMediaUrl(initialMeta?.streamUrl || '', initialMeta?.roomTitle)
         const meta: RoomMetadata = {
@@ -570,6 +631,11 @@ export function useWatchParty() {
         const cleanId = targetRoomId.trim()
         setRoomId(cleanId)
         setIsHost(false)
+
+        const cached = getRoomChat(cleanId)
+        if (cached.length > 0) {
+          setMessages(cached)
+        }
 
         clearHostSession()
         await peerService.initGuest(cleanId)
@@ -646,6 +712,7 @@ export function useWatchParty() {
             isPlaying: getIsPlayingState(),
             currentTime: getCurrentPlaybackTime(),
           },
+          chatHistory: messagesRef.current.slice(-50),
         },
       })
     })
@@ -692,6 +759,23 @@ export function useWatchParty() {
     return () => clearInterval(interval)
   }, [isHost, connectionStatus, userName, getCurrentPlaybackTime, getIsPlayingState])
 
+  const terminateRoom = useCallback(() => {
+    if (isHost) {
+      peerService.send({
+        type: 'ROOM_CLOSED',
+        senderId: peerService.myPeerId,
+        senderName: userName,
+        payload: { reason: 'Host terminated party' },
+      })
+    }
+    clearHostSession()
+    peerService.cleanup()
+    setRoomId('')
+    setIsHost(false)
+    setConnectionStatus('disconnected')
+    window.location.href = '/'
+  }, [isHost, userName])
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -726,5 +810,6 @@ export function useWatchParty() {
     toggleHostOnlyControl,
     startHost,
     joinRoom,
+    terminateRoom,
   }
 }

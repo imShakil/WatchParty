@@ -1,5 +1,5 @@
 import React from 'react'
-import { Users, Share2, Film, Sparkles, UserCheck, Shield, Tv } from 'lucide-react'
+import { Users, Share2, Film, Sparkles, UserCheck, Shield, Tv, LogOut } from 'lucide-react'
 
 interface PartyHeaderProps {
   roomTitle: string
@@ -14,6 +14,7 @@ interface PartyHeaderProps {
   onOpenInvite: () => void
   onOpenStreamModal: () => void
   onEditName: () => void
+  onLeaveOrTerminate?: () => void
 }
 
 export const PartyHeader: React.FC<PartyHeaderProps> = ({
@@ -29,6 +30,7 @@ export const PartyHeader: React.FC<PartyHeaderProps> = ({
   onOpenInvite,
   onOpenStreamModal,
   onEditName,
+  onLeaveOrTerminate,
 }) => {
   return (
     <header className="party-header">
@@ -150,6 +152,31 @@ export const PartyHeader: React.FC<PartyHeaderProps> = ({
           <span>Invite</span>
           <Sparkles size={14} />
         </button>
+
+        {/* End Room (Host) or Leave Room (Guest) */}
+        {onLeaveOrTerminate && (
+          <button
+            onClick={onLeaveOrTerminate}
+            className="btn-action"
+            style={
+              isHost
+                ? {
+                    background: 'rgba(239, 68, 68, 0.12)',
+                    borderColor: 'rgba(239, 68, 68, 0.35)',
+                    color: '#f87171',
+                  }
+                : {
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    borderColor: 'rgba(255, 255, 255, 0.12)',
+                    color: 'var(--text-dim)',
+                  }
+            }
+            title={isHost ? 'End watch party for everyone' : 'Leave watch party'}
+          >
+            <LogOut size={15} color={isHost ? '#f87171' : undefined} />
+            <span className="btn-text-responsive">{isHost ? 'End Party' : 'Leave'}</span>
+          </button>
+        )}
       </div>
     </header>
   )

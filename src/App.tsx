@@ -8,6 +8,7 @@ import { InviteModal } from '@/components/modals/InviteModal'
 import { StreamSelectorModal } from '@/components/modals/StreamSelectorModal'
 import { EditNameModal } from '@/components/modals/EditNameModal'
 import { WelcomeModal } from '@/components/modals/WelcomeModal'
+import { ConfirmModal } from '@/components/modals/ConfirmModal'
 import { LandingPage } from '@/components/landing/LandingPage'
 import { parseCurrentRoute, syncRoomUrl } from '@/utils/routeUtils'
 import { getHostSession } from '@/utils/sessionUtils'
@@ -40,12 +41,14 @@ export function App() {
     toggleHostOnlyControl,
     startHost,
     joinRoom,
+    terminateRoom,
   } = useWatchParty()
 
   // Modals state
   const [isInviteOpen, setIsInviteOpen] = useState<boolean>(false)
   const [isStreamModalOpen, setIsStreamModalOpen] = useState<boolean>(false)
   const [isEditNameOpen, setIsEditNameOpen] = useState<boolean>(false)
+  const [isConfirmExitOpen, setIsConfirmExitOpen] = useState<boolean>(false)
   // URL and Path Route parsing (/room/:id, /room/new, or landing)
   const [initialRoute] = useState(() => parseCurrentRoute())
   const urlRoom = initialRoute.roomId
@@ -135,6 +138,7 @@ export function App() {
         onOpenInvite={() => setIsInviteOpen(true)}
         onOpenStreamModal={() => setIsStreamModalOpen(true)}
         onEditName={() => setIsEditNameOpen(true)}
+        onLeaveOrTerminate={() => setIsConfirmExitOpen(true)}
       />
 
       {/* Main Split View */}
@@ -208,6 +212,22 @@ export function App() {
         currentName={userName}
         onClose={() => setIsEditNameOpen(false)}
         onSaveName={updateUserName}
+      />
+
+      {/* Leave or Terminate Room Confirmation Modal */}
+      <ConfirmModal
+        isOpen={isConfirmExitOpen}
+        title={isHost ? 'End Watch Party?' : 'Leave Watch Party?'}
+        message={
+          isHost
+            ? 'Are you sure you want to end this watch party for everyone? All connected friends will be disconnected from the room.'
+            : 'Are you sure you want to leave this watch party?'
+        }
+        confirmText={isHost ? 'End Party for Everyone' : 'Leave Party'}
+        cancelText="Stay in Room"
+        isDestructive={isHost}
+        onConfirm={terminateRoom}
+        onClose={() => setIsConfirmExitOpen(false)}
       />
 
       {/* Connection error toast if any */}

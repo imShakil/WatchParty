@@ -219,6 +219,12 @@ body {
   }
 }
 
+@media (max-width: 768px) {
+  .btn-text-responsive {
+    display: none !important;
+  }
+}
+
 /* Floating Reactions */
 .floating-reaction {
   position: absolute;

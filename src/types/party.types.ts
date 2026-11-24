@@ -13,6 +13,7 @@ export type PartyMessageType =
   | 'CONTROL_MODE_CHANGE'
   | 'PARTICIPANT_INFO'
   | 'PARTICIPANT_ROSTER'
+  | 'ROOM_CLOSED'
 
 export interface SyncPayload {
   isPlaying: boolean
