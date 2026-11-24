@@ -8,6 +8,9 @@ import { InviteModal } from '@/components/modals/InviteModal'
 import { StreamSelectorModal } from '@/components/modals/StreamSelectorModal'
 import { EditNameModal } from '@/components/modals/EditNameModal'
 import { WelcomeModal } from '@/components/modals/WelcomeModal'
+import { LandingPage } from '@/components/landing/LandingPage'
+import { parseCurrentRoute, syncRoomUrl } from '@/utils/routeUtils'
+import { getHostSession } from '@/utils/sessionUtils'
 
 export function App() {
   const {
@@ -24,6 +27,7 @@ export function App() {
     isPeerBuffering,
     bufferingPeerName,
     videoRef,
+    playerControllerRef,
     triggerReaction,
     sendChatMessage,
     handlePlayerPlay,
@@ -40,37 +44,51 @@ export function App() {
   const [isInviteOpen, setIsInviteOpen] = useState<boolean>(false)
   const [isStreamModalOpen, setIsStreamModalOpen] = useState<boolean>(false)
   const [isEditNameOpen, setIsEditNameOpen] = useState<boolean>(false)
-  const [isWelcomeOpen, setIsWelcomeOpen] = useState<boolean>(true)
+  // URL and Path Route parsing (/room/:id, /room/new, or landing)
+  const [initialRoute] = useState(() => parseCurrentRoute())
+  const urlRoom = initialRoute.roomId
+  const urlStream = initialRoute.streamUrl
+  const urlTitle = initialRoute.title
 
-  // URL Params query
-  const [urlRoom] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return null
-    return new URLSearchParams(window.location.search).get('room')
+  const [isWelcomeOpen, setIsWelcomeOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true
+    const initial = parseCurrentRoute()
+    if (initial.roomId && getHostSession(initial.roomId)) return false
+    return true
   })
-  const [urlStream] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return null
-    return new URLSearchParams(window.location.search).get('stream')
-  })
-  const [urlTitle] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return null
-    return new URLSearchParams(window.location.search).get('title')
-  })
+  const [isTheaterMode, setIsTheaterMode] = useState<boolean>(false)
 
-  // Close welcome modal when connected to a room
+  // Sync route when connected to a room
   useEffect(() => {
     if (roomId && connectionStatus === 'connected') {
-      setIsWelcomeOpen(false)
+      syncRoomUrl(roomId)
     }
   }, [roomId, connectionStatus])
 
-  const handleHostParty = (streamUrl?: string, title?: string) => {
+  // Auto-restore host status on page reload if this client hosted this room
+  useEffect(() => {
+    if (!urlRoom || connectionStatus !== 'disconnected') return
+    const savedHost = getHostSession(urlRoom)
+    if (savedHost) {
+      startHost(urlRoom, savedHost.roomMetadata)
+    }
+  }, [urlRoom, connectionStatus, startHost])
+
+  const handleHostParty = (
+    streamUrl?: string,
+    title?: string,
+    customRoomId?: string,
+    posterUrl?: string
+  ) => {
     const defaultStream =
       urlStream || streamUrl || 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8'
-    const defaultTitle = urlTitle || title || 'Big Buck Bunny (Live Party)'
+    const defaultTitle = urlTitle || title || 'Live Watch Party'
+    const defaultPoster = posterUrl || undefined
 
-    startHost(undefined, {
+    startHost(customRoomId, {
       streamUrl: defaultStream,
       roomTitle: defaultTitle,
+      posterUrl: defaultPoster,
     })
     setIsWelcomeOpen(false)
   }
@@ -78,6 +96,25 @@ export function App() {
   const handleJoinParty = (targetRoomId: string) => {
     joinRoom(targetRoomId)
     setIsWelcomeOpen(false)
+  }
+
+  // Determine if user is on landing page (no active room, no direct invite in URL)
+  const isLandingView =
+    !roomId &&
+    connectionStatus !== 'connected' &&
+    connectionStatus !== 'connecting' &&
+    !urlRoom &&
+    initialRoute.type === 'landing'
+
+  if (isLandingView) {
+    return (
+      <LandingPage
+        userName={userName}
+        onSaveName={updateUserName}
+        onHostParty={handleHostParty}
+        onJoinParty={handleJoinParty}
+      />
+    )
   }
 
   return (
@@ -91,13 +128,15 @@ export function App() {
         isPeerBuffering={isPeerBuffering}
         bufferingPeerName={bufferingPeerName}
         userName={userName}
+        isTheaterMode={isTheaterMode}
+        onToggleTheaterMode={() => setIsTheaterMode((prev) => !prev)}
         onOpenInvite={() => setIsInviteOpen(true)}
         onOpenStreamModal={() => setIsStreamModalOpen(true)}
         onEditName={() => setIsEditNameOpen(true)}
       />
 
       {/* Main Split View */}
-      <main className="party-main">
+      <main className={`party-main ${isTheaterMode ? 'theater-mode' : ''}`}>
         {/* Left: Video Player */}
         <div style={{ flex: 1, position: 'relative', height: '100%' }}>
           <PartyPlayer
@@ -106,6 +145,7 @@ export function App() {
             isHost={isHost}
             isHostOnlyControl={roomMetadata.isHostOnlyControl}
             videoRef={videoRef}
+            controllerRef={playerControllerRef}
             onPlay={handlePlayerPlay}
             onPause={handlePlayerPause}
             onSeek={handlePlayerSeek}
@@ -130,7 +170,7 @@ export function App() {
 
       {/* Welcome / Join Modal */}
       <WelcomeModal
-        isOpen={isWelcomeOpen}
+        isOpen={isWelcomeOpen && !(roomId && connectionStatus === 'connected')}
         initialRoomParam={urlRoom}
         initialStreamParam={urlStream}
         initialTitleParam={urlTitle}

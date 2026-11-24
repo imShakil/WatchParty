@@ -1,5 +1,5 @@
 import React from 'react'
-import { Users, Share2, Film, Sparkles, UserCheck, Shield } from 'lucide-react'
+import { Users, Share2, Film, Sparkles, UserCheck, Shield, Tv } from 'lucide-react'
 
 interface PartyHeaderProps {
   roomTitle: string
@@ -9,6 +9,8 @@ interface PartyHeaderProps {
   isPeerBuffering: boolean
   bufferingPeerName?: string
   userName: string
+  isTheaterMode?: boolean
+  onToggleTheaterMode?: () => void
   onOpenInvite: () => void
   onOpenStreamModal: () => void
   onEditName: () => void
@@ -22,6 +24,8 @@ export const PartyHeader: React.FC<PartyHeaderProps> = ({
   isPeerBuffering,
   bufferingPeerName,
   userName,
+  isTheaterMode,
+  onToggleTheaterMode,
   onOpenInvite,
   onOpenStreamModal,
   onEditName,
@@ -30,30 +34,58 @@ export const PartyHeader: React.FC<PartyHeaderProps> = ({
     <header className="party-header">
       {/* Brand & Room Info */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
-        <div className="brand-badge">
-          <span style={{ fontSize: '1.5rem' }}>🍿</span>
-          <span className="brand-title">Dekho Party</span>
-          <span className="brand-tag">P2P</span>
-        </div>
+        <a
+          href="/"
+          style={{ textDecoration: 'none', color: 'inherit' }}
+          className="brand-badge"
+          title="Return to Dekho Party Home"
+        >
+          <img
+            src="/uploads/dekho-prime-icon-header-128.webp"
+            alt="Dekho Prime"
+            style={{ width: '28px', height: '28px', objectFit: 'contain' }}
+          />
+          <span className="brand-title">
+            Dekho<span style={{ color: 'var(--primary-red, #ea383e)' }}>Prime</span>
+          </span>
+          <span className="brand-tag">PARTY</span>
+        </a>
 
         {roomId && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <span style={{ color: 'var(--border-subtle)', userSelect: 'none' }}>|</span>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span
-                style={{
-                  fontSize: '0.9rem',
-                  fontWeight: 600,
-                  maxWidth: '220px',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  color: 'var(--text-main)',
-                }}
-                title={roomTitle}
-              >
-                {roomTitle || 'Live Watch Room'}
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                <span
+                  style={{
+                    fontSize: '0.9rem',
+                    fontWeight: 700,
+                    maxWidth: '220px',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    color: 'var(--text-main)',
+                  }}
+                  title={roomTitle}
+                >
+                  {roomTitle || 'Live Watch Room'}
+                </span>
+                <span
+                  style={{
+                    fontSize: '0.7rem',
+                    fontFamily: 'monospace',
+                    fontWeight: 600,
+                    padding: '0.1rem 0.45rem',
+                    borderRadius: 'var(--radius-sm)',
+                    background: 'rgba(139, 92, 246, 0.15)',
+                    border: '1px solid rgba(139, 92, 246, 0.3)',
+                    color: '#c4b5fd',
+                  }}
+                  title={`Room ID: ${roomId}`}
+                >
+                  #{roomId}
+                </span>
+              </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                 <span className={`status-dot ${isPeerBuffering ? 'buffering' : ''}`} />
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
@@ -77,6 +109,22 @@ export const PartyHeader: React.FC<PartyHeaderProps> = ({
           {isHost ? <Shield size={14} color="#a78bfa" /> : <UserCheck size={14} color="#38bdf8" />}
           <span>{userName}</span>
         </button>
+
+        {/* Theater / Cinema Mode Toggle */}
+        {onToggleTheaterMode && (
+          <button
+            onClick={onToggleTheaterMode}
+            className={`btn-action ${isTheaterMode ? 'active' : ''}`}
+            style={{
+              background: isTheaterMode ? 'rgba(139, 92, 246, 0.25)' : undefined,
+              borderColor: isTheaterMode ? 'var(--accent-purple)' : undefined,
+            }}
+            title={isTheaterMode ? 'Exit Cinema Mode' : 'Cinema Mode (Wide Screen)'}
+          >
+            <Tv size={16} color={isTheaterMode ? 'var(--accent-purple)' : undefined} />
+            <span style={{ display: 'none', minWidth: '0' }} className="md-inline">Cinema</span>
+          </button>
+        )}
 
         {/* Change Stream (Host only) */}
         {isHost && (

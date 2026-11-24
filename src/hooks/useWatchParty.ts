@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import confetti from 'canvas-confetti'
 import { peerService } from '@/services/peerService'
 import { parseMediaUrl } from '@/utils/mediaUrl'
+import { saveHostSession, clearHostSession } from '@/utils/sessionUtils'
+import type { UnifiedPlayerRef } from '@/types/player.types'
 import type {
   ChatMessage,
   ReactionItem,
@@ -46,15 +48,44 @@ export function useWatchParty() {
 
   // Video Player Ref & Synchronization State
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const playerControllerRef = useRef<UnifiedPlayerRef | null>(null)
   const isLocalAction = useRef<boolean>(false)
   const lastSyncTime = useRef<number>(0)
+  const participantNamesRef = useRef<Record<string, string>>({})
+
+  // Unified playback state helpers
+  const getCurrentPlaybackTime = useCallback((): number => {
+    if (playerControllerRef.current) {
+      return playerControllerRef.current.getCurrentTime()
+    }
+    return videoRef.current?.currentTime || 0
+  }, [])
+
+  const getIsPlayingState = useCallback((): boolean => {
+    if (playerControllerRef.current) {
+      return playerControllerRef.current.isPlaying()
+    }
+    return videoRef.current ? !videoRef.current.paused : false
+  }, [])
 
   // Save username to storage
   const updateUserName = useCallback((name: string) => {
     const trimmed = name.trim() || `Viewer ${Math.floor(100 + Math.random() * 900)}`
     setUserName(trimmed)
     localStorage.setItem('dekho_party_name', trimmed)
-  }, [])
+    if (peerService.myPeerId) {
+      participantNamesRef.current[peerService.myPeerId] = trimmed
+    }
+    setParticipants((prev) =>
+      prev.map((p) => (p.isSelf ? { ...p, name: trimmed } : p))
+    )
+    peerService.send({
+      type: 'PARTICIPANT_INFO',
+      senderId: peerService.myPeerId,
+      senderName: trimmed,
+      payload: { id: peerService.myPeerId, name: trimmed, isHost },
+    })
+  }, [isHost])
 
   // Trigger floating reaction locally & send to peers
   const triggerReaction = useCallback(
@@ -137,37 +168,35 @@ export function useWatchParty() {
   // Broadcast player controls
   const handlePlayerPlay = useCallback(() => {
     if (isLocalAction.current) return
-    const video = videoRef.current
-    if (!video) return
+    const curTime = getCurrentPlaybackTime()
 
     peerService.send({
       type: 'PLAY',
       senderId: peerService.myPeerId,
       senderName: userName,
       payload: {
-        time: video.currentTime,
+        time: curTime,
         senderName: userName,
         timestamp: Date.now(),
       } as ControlPayload,
     })
-  }, [userName])
+  }, [userName, getCurrentPlaybackTime])
 
   const handlePlayerPause = useCallback(() => {
     if (isLocalAction.current) return
-    const video = videoRef.current
-    if (!video) return
+    const curTime = getCurrentPlaybackTime()
 
     peerService.send({
       type: 'PAUSE',
       senderId: peerService.myPeerId,
       senderName: userName,
       payload: {
-        time: video.currentTime,
+        time: curTime,
         senderName: userName,
         timestamp: Date.now(),
       } as ControlPayload,
     })
-  }, [userName])
+  }, [userName, getCurrentPlaybackTime])
 
   const handlePlayerSeek = useCallback(
     (time: number) => {
@@ -210,6 +239,9 @@ export function useWatchParty() {
         posterUrl: poster || roomMetadata.posterUrl,
       }
       setRoomMetadata(newMeta)
+      if (isHost && newMeta.roomId) {
+        saveHostSession(newMeta.roomId, newMeta)
+      }
       addSystemNotice(`Stream changed to: ${newMeta.roomTitle}`)
 
       peerService.send({
@@ -219,7 +251,7 @@ export function useWatchParty() {
         payload: newMeta,
       })
     },
-    [roomMetadata, userName, addSystemNotice]
+    [roomMetadata, userName, addSystemNotice, isHost]
   )
 
   // Toggle host only control mode
@@ -270,68 +302,91 @@ export function useWatchParty() {
         case 'PLAY': {
           const { time, senderName } = packet.payload as ControlPayload
           addSystemNotice(`${senderName} started playback`)
-          if (video) {
-            isLocalAction.current = true
+          isLocalAction.current = true
+          if (playerControllerRef.current) {
+            if (Math.abs(playerControllerRef.current.getCurrentTime() - time) > 1.0) {
+              playerControllerRef.current.seekTo(time)
+            }
+            playerControllerRef.current.play()
+          } else if (video) {
             if (Math.abs(video.currentTime - time) > 1.0) {
               video.currentTime = time
             }
-            video.play().catch(() => {
-              /* autoplay policy handle */
-            })
-            setTimeout(() => {
-              isLocalAction.current = false
-            }, 300)
+            video.play().catch(() => {})
           }
+          setTimeout(() => {
+            isLocalAction.current = false
+          }, 350)
           break
         }
 
         case 'PAUSE': {
           const { time, senderName } = packet.payload as ControlPayload
           addSystemNotice(`${senderName} paused playback`)
-          if (video) {
-            isLocalAction.current = true
+          isLocalAction.current = true
+          if (playerControllerRef.current) {
+            playerControllerRef.current.pause()
+            if (Math.abs(playerControllerRef.current.getCurrentTime() - time) > 1.0) {
+              playerControllerRef.current.seekTo(time)
+            }
+          } else if (video) {
             video.pause()
             if (Math.abs(video.currentTime - time) > 1.0) {
               video.currentTime = time
             }
-            setTimeout(() => {
-              isLocalAction.current = false
-            }, 300)
           }
+          setTimeout(() => {
+            isLocalAction.current = false
+          }, 350)
           break
         }
 
         case 'SEEK': {
           const { time, senderName } = packet.payload as ControlPayload
           addSystemNotice(`${senderName} jumped to ${Math.floor(time / 60)}:${Math.floor(time % 60).toString().padStart(2, '0')}`)
-          if (video) {
-            isLocalAction.current = true
+          isLocalAction.current = true
+          if (playerControllerRef.current) {
+            playerControllerRef.current.seekTo(time)
+          } else if (video) {
             video.currentTime = time
-            setTimeout(() => {
-              isLocalAction.current = false
-            }, 300)
           }
+          setTimeout(() => {
+            isLocalAction.current = false
+          }, 350)
           break
         }
 
         case 'SYNC_STATE': {
           if (isHost) break // only guests sync with host heartbeat
           const { isPlaying, currentTime } = packet.payload as SyncPayload
-          if (!video) break
+          const curTime = getCurrentPlaybackTime()
+          const isCurPlaying = getIsPlayingState()
+          const drift = Math.abs(curTime - currentTime)
 
-          const drift = Math.abs(video.currentTime - currentTime)
           if (drift > DRIFT_TOLERANCE_SECONDS) {
             isLocalAction.current = true
-            video.currentTime = currentTime
+            if (playerControllerRef.current) {
+              playerControllerRef.current.seekTo(currentTime)
+            } else if (video) {
+              video.currentTime = currentTime
+            }
             setTimeout(() => {
               isLocalAction.current = false
-            }, 300)
+            }, 350)
           }
 
-          if (isPlaying && video.paused) {
-            video.play().catch(() => {})
-          } else if (!isPlaying && !video.paused) {
-            video.pause()
+          if (isPlaying && !isCurPlaying) {
+            if (playerControllerRef.current) {
+              playerControllerRef.current.play()
+            } else if (video) {
+              video.play().catch(() => {})
+            }
+          } else if (!isPlaying && isCurPlaying) {
+            if (playerControllerRef.current) {
+              playerControllerRef.current.pause()
+            } else if (video) {
+              video.pause()
+            }
           }
           break
         }
@@ -364,9 +419,28 @@ export function useWatchParty() {
           break
         }
 
+        case 'PARTICIPANT_INFO': {
+          const info = packet.payload as { id: string; name: string }
+          if (info && info.id && info.name) {
+            participantNamesRef.current[info.id] = info.name
+            setParticipants((prev) =>
+              prev.map((p) => (p.id === info.id ? { ...p, name: info.name } : p))
+            )
+          }
+          break
+        }
+
         case 'JOIN_REQUEST': {
-          // When someone asks to join, host responds with current metadata and playback state
-          if (isHost && video) {
+          // When someone asks to join, host responds with current metadata, playback state, and host info
+          const req = packet.payload as { peerId: string; userName: string }
+          if (req && req.peerId && req.userName) {
+            participantNamesRef.current[req.peerId] = req.userName
+            setParticipants((prev) =>
+              prev.map((p) => (p.id === req.peerId ? { ...p, name: req.userName } : p))
+            )
+          }
+
+          if (isHost) {
             addSystemNotice(`${packet.senderName} joined the party!`)
             confetti({ particleCount: 30, spread: 45 })
 
@@ -377,9 +451,10 @@ export function useWatchParty() {
               payload: {
                 roomMetadata,
                 currentState: {
-                  isPlaying: !video.paused,
-                  currentTime: video.currentTime,
+                  isPlaying: getIsPlayingState(),
+                  currentTime: getCurrentPlaybackTime(),
                 },
+                hostName: userName,
               },
             })
           }
@@ -390,20 +465,36 @@ export function useWatchParty() {
           const ack = packet.payload as {
             roomMetadata: RoomMetadata
             currentState: { isPlaying: boolean; currentTime: number }
+            hostName?: string
           }
           setRoomMetadata(ack.roomMetadata)
-          addSystemNotice(`Joined party hosted by ${packet.senderName}!`)
-          if (video && ack.currentState) {
-            video.currentTime = ack.currentState.currentTime
-            if (ack.currentState.isPlaying) {
-              video.play().catch(() => {})
+          const hostDisplayName = ack.hostName || packet.senderName
+          participantNamesRef.current[packet.senderId] = hostDisplayName
+          setParticipants((prev) =>
+            prev.map((p) =>
+              p.id === packet.senderId || p.isHost ? { ...p, name: hostDisplayName } : p
+            )
+          )
+
+          addSystemNotice(`Joined party hosted by ${hostDisplayName}!`)
+          if (ack.currentState) {
+            if (playerControllerRef.current) {
+              playerControllerRef.current.seekTo(ack.currentState.currentTime)
+              if (ack.currentState.isPlaying) {
+                playerControllerRef.current.play()
+              }
+            } else if (video) {
+              video.currentTime = ack.currentState.currentTime
+              if (ack.currentState.isPlaying) {
+                video.play().catch(() => {})
+              }
             }
           }
           break
         }
       }
     },
-    [isHost, userName, roomMetadata, addSystemNotice]
+    [isHost, userName, roomMetadata, addSystemNotice, getCurrentPlaybackTime, getIsPlayingState]
   )
 
   // Start Hosting
@@ -414,7 +505,7 @@ export function useWatchParty() {
         setErrorMessage(null)
 
         const generatedRoomId =
-          initialRoomId || `party-${Math.random().toString(36).substring(2, 8)}`
+          initialRoomId || `dpwp-${Math.random().toString(36).substring(2, 8)}`
         const id = await peerService.initHost(generatedRoomId)
 
         setRoomId(id)
@@ -431,6 +522,7 @@ export function useWatchParty() {
           hostId: id,
         }
         setRoomMetadata(meta)
+        saveHostSession(id, meta)
 
         setParticipants([
           {
@@ -465,6 +557,7 @@ export function useWatchParty() {
         setRoomId(cleanId)
         setIsHost(false)
 
+        clearHostSession()
         await peerService.initGuest(cleanId)
 
         // Send join request to host
@@ -516,7 +609,7 @@ export function useWatchParty() {
 
         const rem = peerIds.map((pId, idx) => ({
           id: pId,
-          name: isHost ? `Friend ${idx + 1}` : 'Host',
+          name: participantNamesRef.current[pId] || (isHost ? `Friend ${idx + 1}` : 'Host'),
           isHost: !isHost,
           isSelf: false,
           isBuffering: false,
@@ -529,7 +622,6 @@ export function useWatchParty() {
 
     const unsubGuest = peerService.onGuestConnected(() => {
       if (!isHost) return
-      const video = videoRef.current
       peerService.send({
         type: 'JOIN_ACK',
         senderId: peerService.myPeerId,
@@ -537,8 +629,8 @@ export function useWatchParty() {
         payload: {
           roomMetadata,
           currentState: {
-            isPlaying: video ? !video.paused : false,
-            currentTime: video ? video.currentTime : 0,
+            isPlaying: getIsPlayingState(),
+            currentTime: getCurrentPlaybackTime(),
           },
         },
       })
@@ -550,27 +642,27 @@ export function useWatchParty() {
       unsubPeers()
       unsubGuest()
     }
-  }, [handleIncomingPacket, userName, isHost, roomMetadata])
+  }, [handleIncomingPacket, userName, isHost, roomMetadata, getIsPlayingState, getCurrentPlaybackTime])
 
   // Host heartbeat interval to keep guests in sync
   useEffect(() => {
     if (!isHost || connectionStatus !== 'connected') return
 
     const interval = setInterval(() => {
-      const video = videoRef.current
-      if (!video) return
-
       const now = Date.now()
       if (now - lastSyncTime.current >= SYNC_HEARTBEAT_INTERVAL_MS) {
         lastSyncTime.current = now
+        const curTime = getCurrentPlaybackTime()
+        const curPlaying = getIsPlayingState()
+
         peerService.send({
           type: 'SYNC_STATE',
           senderId: peerService.myPeerId,
           senderName: userName,
           payload: {
-            isPlaying: !video.paused,
-            currentTime: video.currentTime,
-            playbackRate: video.playbackRate,
+            isPlaying: curPlaying,
+            currentTime: curTime,
+            playbackRate: 1.0,
             timestamp: now,
           } as SyncPayload,
         })
@@ -578,7 +670,7 @@ export function useWatchParty() {
     }, SYNC_HEARTBEAT_INTERVAL_MS)
 
     return () => clearInterval(interval)
-  }, [isHost, connectionStatus, userName])
+  }, [isHost, connectionStatus, userName, getCurrentPlaybackTime, getIsPlayingState])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -601,6 +693,7 @@ export function useWatchParty() {
     isPeerBuffering,
     bufferingPeerName,
     videoRef,
+    playerControllerRef,
     triggerReaction,
     sendChatMessage,
     handlePlayerPlay,

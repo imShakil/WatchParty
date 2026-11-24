@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { X, Film, PlayCircle, Sparkles } from 'lucide-react'
+import React, { useState, useRef } from 'react'
+import { X, Film, PlayCircle, Sparkles, Upload, Link2, HardDrive } from 'lucide-react'
 
 interface StreamSelectorModalProps {
   isOpen: boolean
@@ -11,24 +11,24 @@ interface StreamSelectorModalProps {
 
 const PRESET_STREAMS = [
   {
-    title: 'Big Buck Bunny (HLS)',
-    url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
-    category: 'Animation',
-  },
-  {
-    title: 'Tears of Steel (HLS)',
-    url: 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
-    category: 'Sci-Fi Demo',
-  },
-  {
-    title: 'Sintel (Direct MP4)',
-    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4',
-    category: 'Short Movie',
-  },
-  {
-    title: 'Cosmos Laundromat (YouTube)',
+    title: 'Cosmos Laundromat (YouTube 4K)',
     url: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ',
     category: 'YouTube Animation',
+  },
+  {
+    title: 'Big Buck Bunny (HLS)',
+    url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+    category: 'HLS Live Stream',
+  },
+  {
+    title: 'Tears of Steel (HLS Demo)',
+    url: 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
+    category: 'HLS Multi-Audio',
+  },
+  {
+    title: 'Sintel Open Movie (MP4)',
+    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4',
+    category: 'Direct MP4',
   },
 ]
 
@@ -39,12 +39,15 @@ export const StreamSelectorModal: React.FC<StreamSelectorModalProps> = ({
   onClose,
   onSaveStream,
 }) => {
+  const [activeTab, setActiveTab] = useState<'url' | 'local'>('url')
   const [streamUrl, setStreamUrl] = useState<string>(currentUrl)
   const [title, setTitle] = useState<string>(currentTitle)
+  const [selectedFileName, setSelectedFileName] = useState<string>('')
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   if (!isOpen) return null
 
-  const handleApply = (e: React.FormEvent) => {
+  const handleApplyUrl = (e: React.FormEvent) => {
     e.preventDefault()
     if (!streamUrl.trim()) return
     onSaveStream(streamUrl.trim(), title.trim() || 'Watch Party Stream')
@@ -54,6 +57,23 @@ export const StreamSelectorModal: React.FC<StreamSelectorModalProps> = ({
   const handleSelectPreset = (presetUrl: string, presetTitle: string) => {
     setStreamUrl(presetUrl)
     setTitle(presetTitle)
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const objectUrl = URL.createObjectURL(file)
+    const cleanTitle = file.name.replace(/\.[^/.]+$/, '')
+    setSelectedFileName(file.name)
+    setTitle(cleanTitle)
+    setStreamUrl(objectUrl)
+  }
+
+  const handleApplyLocalFile = () => {
+    if (!streamUrl) return
+    onSaveStream(streamUrl, title || selectedFileName || 'Local Movie')
+    onClose()
   }
 
   return (
@@ -74,7 +94,7 @@ export const StreamSelectorModal: React.FC<StreamSelectorModalProps> = ({
       <div
         style={{
           width: '100%',
-          maxWidth: '520px',
+          maxWidth: '540px',
           background: 'var(--bg-surface)',
           borderRadius: 'var(--radius-lg)',
           border: '1px solid var(--border-subtle)',
@@ -91,7 +111,7 @@ export const StreamSelectorModal: React.FC<StreamSelectorModalProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
             <Film size={22} color="var(--accent-purple)" />
             <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-main)' }}>
-              Choose Video Stream
+              Choose Video Source
             </h3>
           </div>
           <button onClick={onClose} className="btn-icon" style={{ padding: '0.4rem' }}>
@@ -99,101 +119,234 @@ export const StreamSelectorModal: React.FC<StreamSelectorModalProps> = ({
           </button>
         </div>
 
-        {/* Preset Demo Streams */}
-        <div>
-          <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-dim)', marginBottom: '0.5rem', display: 'block' }}>
-            Quick Demo Streams
-          </span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {PRESET_STREAMS.map((p) => (
-              <div
-                key={p.url}
-                onClick={() => handleSelectPreset(p.url, p.title)}
-                style={{
-                  padding: '0.65rem 0.85rem',
-                  borderRadius: 'var(--radius-md)',
-                  background: streamUrl === p.url ? 'rgba(139, 92, 246, 0.15)' : 'var(--bg-secondary)',
-                  border: streamUrl === p.url ? '1px solid var(--accent-purple)' : '1px solid var(--border-subtle)',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                  <PlayCircle size={16} color="var(--accent-purple)" />
-                  <div>
-                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                      {p.title}
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{p.category}</div>
-                  </div>
-                </div>
-                {streamUrl === p.url && (
-                  <span style={{ fontSize: '0.75rem', color: 'var(--accent-purple)', fontWeight: 700 }}>
-                    Selected
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
+        {/* Source Mode Tabs */}
+        <div
+          style={{
+            display: 'flex',
+            background: 'var(--bg-secondary)',
+            borderRadius: 'var(--radius-md)',
+            padding: '0.25rem',
+            gap: '0.25rem',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setActiveTab('url')}
+            className="btn-action"
+            style={{
+              flex: 1,
+              justifyContent: 'center',
+              background: activeTab === 'url' ? 'var(--bg-surface)' : 'transparent',
+              color: activeTab === 'url' ? 'var(--text-main)' : 'var(--text-dim)',
+              border: activeTab === 'url' ? '1px solid var(--border-subtle)' : 'none',
+              padding: '0.5rem',
+              fontSize: '0.85rem',
+            }}
+          >
+            <Link2 size={15} />
+            <span>Web URL / YouTube</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('local')}
+            className="btn-action"
+            style={{
+              flex: 1,
+              justifyContent: 'center',
+              background: activeTab === 'local' ? 'var(--bg-surface)' : 'transparent',
+              color: activeTab === 'local' ? 'var(--text-main)' : 'var(--text-dim)',
+              border: activeTab === 'local' ? '1px solid var(--border-subtle)' : 'none',
+              padding: '0.5rem',
+              fontSize: '0.85rem',
+            }}
+          >
+            <HardDrive size={15} />
+            <span>Local Video File</span>
+          </button>
         </div>
 
-        {/* Custom Stream Input Form */}
-        <form onSubmit={handleApply} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>
-              Movie / Video Title
-            </label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Inception (2010)"
-              style={{
-                padding: '0.65rem 0.85rem',
-                borderRadius: 'var(--radius-md)',
-                background: 'var(--bg-secondary)',
-                border: '1px solid var(--border-subtle)',
-                color: 'var(--text-main)',
-                fontSize: '0.85rem',
-                outline: 'none',
-              }}
-            />
-          </div>
+        {activeTab === 'url' ? (
+          <>
+            {/* Preset Streams */}
+            <div>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-dim)', marginBottom: '0.5rem', display: 'block' }}>
+                Featured Presets
+              </span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                {PRESET_STREAMS.map((p) => (
+                  <div
+                    key={p.url}
+                    onClick={() => handleSelectPreset(p.url, p.title)}
+                    style={{
+                      padding: '0.6rem 0.85rem',
+                      borderRadius: 'var(--radius-md)',
+                      background: streamUrl === p.url ? 'rgba(139, 92, 246, 0.15)' : 'var(--bg-secondary)',
+                      border: streamUrl === p.url ? '1px solid var(--accent-purple)' : '1px solid var(--border-subtle)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <PlayCircle size={16} color="var(--accent-purple)" />
+                      <div>
+                        <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                          {p.title}
+                        </div>
+                        <div style={{ fontSize: '0.725rem', color: 'var(--text-dim)' }}>{p.category}</div>
+                      </div>
+                    </div>
+                    {streamUrl === p.url && (
+                      <span style={{ fontSize: '0.725rem', color: 'var(--accent-purple)', fontWeight: 700 }}>
+                        Selected
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>
-              Stream URL (YouTube, .m3u8, .mp4, or embed)
-            </label>
-            <input
-              type="text"
-              value={streamUrl}
-              onChange={(e) => setStreamUrl(e.target.value)}
-              placeholder="https://example.com/movie.m3u8"
-              style={{
-                padding: '0.65rem 0.85rem',
-                borderRadius: 'var(--radius-md)',
-                background: 'var(--bg-secondary)',
-                border: '1px solid var(--border-subtle)',
-                color: 'var(--text-main)',
-                fontSize: '0.85rem',
-                outline: 'none',
-              }}
-            />
-          </div>
+            {/* Custom Stream Input Form */}
+            <form onSubmit={handleApplyUrl} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                  Video Title
+                </label>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. My Favorite Movie"
+                  style={{
+                    padding: '0.65rem 0.85rem',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-main)',
+                    fontSize: '0.85rem',
+                    outline: 'none',
+                  }}
+                />
+              </div>
 
-          <button
-            type="submit"
-            disabled={!streamUrl.trim()}
-            className="btn-action btn-primary"
-            style={{ width: '100%', justifyContent: 'center', padding: '0.75rem' }}
-          >
-            <span>Load Video into Party</span>
-            <Sparkles size={16} />
-          </button>
-        </form>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                  Video URL (YouTube, HLS .m3u8, MP4, WebM)
+                </label>
+                <input
+                  type="text"
+                  value={streamUrl}
+                  onChange={(e) => setStreamUrl(e.target.value)}
+                  placeholder="https://youtube.com/watch?v=... or https://.../stream.m3u8"
+                  style={{
+                    padding: '0.65rem 0.85rem',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-main)',
+                    fontSize: '0.85rem',
+                    outline: 'none',
+                  }}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={!streamUrl.trim()}
+                className="btn-action btn-primary"
+                style={{ width: '100%', justifyContent: 'center', padding: '0.75rem' }}
+              >
+                <span>Load Stream into Party</span>
+                <Sparkles size={16} />
+              </button>
+            </form>
+          </>
+        ) : (
+          /* Local File Mode */
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                border: '2px dashed var(--border-subtle)',
+                borderRadius: 'var(--radius-lg)',
+                padding: '2rem 1.5rem',
+                textAlign: 'center',
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '0.75rem',
+                background: 'var(--bg-secondary)',
+                transition: 'border-color 0.2s ease',
+              }}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="video/mp4,video/webm,video/ogg,video/quicktime,video/x-matroska"
+                onChange={handleFileChange}
+                style={{ display: 'none' }}
+              />
+              <div
+                style={{
+                  width: '48px',
+                  height: '48px',
+                  borderRadius: '50%',
+                  background: 'rgba(139, 92, 246, 0.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Upload size={24} color="var(--accent-purple)" />
+              </div>
+              <div>
+                <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                  {selectedFileName ? selectedFileName : 'Choose a Video File from your device'}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '0.25rem' }}>
+                  Supports MP4, WebM, MKV, MOV • Zero server upload • Instant 4K playback
+                </div>
+              </div>
+            </div>
+
+            {selectedFileName && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                  Display Title
+                </label>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Movie Title"
+                  style={{
+                    padding: '0.65rem 0.85rem',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-main)',
+                    fontSize: '0.85rem',
+                    outline: 'none',
+                  }}
+                />
+              </div>
+            )}
+
+            <button
+              type="button"
+              disabled={!streamUrl || !selectedFileName}
+              onClick={handleApplyLocalFile}
+              className="btn-action btn-primary"
+              style={{ width: '100%', justifyContent: 'center', padding: '0.75rem' }}
+            >
+              <span>Play Local Movie</span>
+              <PlayCircle size={16} />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

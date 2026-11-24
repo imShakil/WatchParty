@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Play, LogIn, User } from 'lucide-react'
+import { Play, LogIn, User, Hash } from 'lucide-react'
 
 interface WelcomeModalProps {
   isOpen: boolean
@@ -8,7 +8,7 @@ interface WelcomeModalProps {
   initialTitleParam: string | null
   userName: string
   onSaveName: (name: string) => void
-  onHostParty: (streamUrl?: string, title?: string) => void
+  onHostParty: (streamUrl?: string, title?: string, customRoomId?: string) => void
   onJoinParty: (roomId: string) => void
 }
 
@@ -24,14 +24,19 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({
 }) => {
   const [name, setName] = useState<string>(userName)
   const [joinCode, setJoinCode] = useState<string>(initialRoomParam || '')
+  const [partyTitle, setPartyTitle] = useState<string>(initialTitleParam || 'My Watch Party')
+  const [customRoomId, setCustomRoomId] = useState<string>('')
+  const [showAdvancedHost, setShowAdvancedHost] = useState<boolean>(false)
+
   const streamUrl = initialStreamParam || 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8'
-  const streamTitle = initialTitleParam || 'Big Buck Bunny (Demo Party)'
+  const streamTitle = partyTitle || initialTitleParam || 'Live Watch Party'
 
   if (!isOpen) return null
 
   const handleStartHosting = () => {
     onSaveName(name.trim() || userName)
-    onHostParty(streamUrl, streamTitle)
+    const sanitizedSlug = customRoomId.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '')
+    onHostParty(streamUrl, streamTitle, sanitizedSlug || undefined)
   }
 
   const handleJoinExisting = () => {
@@ -78,16 +83,19 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({
               width: '56px',
               height: '56px',
               borderRadius: '50%',
-              background: 'rgba(139, 92, 246, 0.15)',
-              border: '1px solid rgba(139, 92, 246, 0.3)',
-              fontSize: '1.8rem',
+              background: 'rgba(234, 56, 62, 0.12)',
+              border: '1px solid rgba(234, 56, 62, 0.25)',
               marginBottom: '0.75rem',
             }}
           >
-            🍿
+            <img
+              src="/uploads/dekho-prime-icon-header-128.webp"
+              alt="Dekho Prime"
+              style={{ width: '34px', height: '34px', objectFit: 'contain' }}
+            />
           </div>
           <h2 style={{ fontSize: '1.5rem', fontWeight: 800, fontFamily: 'var(--font-display)' }}>
-            Welcome to <span className="brand-title">Dekho Party</span>
+            Welcome to <span className="brand-title">Dekho<span style={{ color: 'var(--primary-red, #ea383e)' }}>Prime</span></span> <span className="brand-tag">PARTY</span>
           </h2>
           <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
             Watch movies & shows together in perfect peer-to-peer sync with live chat.
@@ -161,16 +169,76 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between',
-                gap: '1rem',
+                gap: '0.85rem',
               }}
             >
-              <div>
-                <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '0.25rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)' }}>
                   Host a Party
                 </h4>
-                <p style={{ fontSize: '0.775rem', color: 'var(--text-dim)', lineHeight: 1.4 }}>
-                  Start a fresh room, pick a video, and invite friends with a link.
-                </p>
+                <div>
+                  <label style={{ fontSize: '0.75rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.2rem' }}>
+                    Party Name
+                  </label>
+                  <input
+                    type="text"
+                    value={partyTitle}
+                    maxLength={40}
+                    onChange={(e) => setPartyTitle(e.target.value)}
+                    placeholder="e.g. Movie Marathon"
+                    style={{
+                      width: '100%',
+                      padding: '0.45rem 0.6rem',
+                      borderRadius: 'var(--radius-sm)',
+                      background: 'var(--bg-surface)',
+                      border: '1px solid var(--border-subtle)',
+                      color: 'var(--text-main)',
+                      fontSize: '0.8rem',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
+                {showAdvancedHost ? (
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: '0.3rem', marginBottom: '0.2rem' }}>
+                      <Hash size={12} color="var(--accent-purple)" /> Custom Room ID (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={customRoomId}
+                      maxLength={24}
+                      onChange={(e) => setCustomRoomId(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
+                      placeholder="e.g. shakil-cinema"
+                      style={{
+                        width: '100%',
+                        padding: '0.45rem 0.6rem',
+                        borderRadius: 'var(--radius-sm)',
+                        background: 'var(--bg-surface)',
+                        border: '1px solid var(--border-subtle)',
+                        color: 'var(--text-main)',
+                        fontSize: '0.8rem',
+                        outline: 'none',
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvancedHost(true)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--accent-purple)',
+                      fontSize: '0.725rem',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      padding: 0,
+                    }}
+                  >
+                    + Set Custom Room ID
+                  </button>
+                )}
               </div>
               <button
                 onClick={handleStartHosting}

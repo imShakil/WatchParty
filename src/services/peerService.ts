@@ -29,9 +29,9 @@ export class PeerService {
   private guestConnectedListeners: Set<GuestConnectedHandler> = new Set()
 
   /**
-   * Initialize a host peer with optional custom room ID
+   * Initialize a host peer with optional custom room ID and retry mechanism for reloads
    */
-  public async initHost(roomId?: string): Promise<string> {
+  public async initHost(roomId?: string, retryCount: number = 0): Promise<string> {
     this.isHost = true
     return new Promise((resolve, reject) => {
       this.cleanup()
@@ -53,8 +53,14 @@ export class PeerService {
       })
 
       peerInstance.on('error', (err) => {
-        // If ID is already taken, fall back to auto-generated ID
+        // If ID is temporarily locked on page reload, retry once after a short delay
         if (err.type === 'unavailable-id' && roomId) {
+          if (retryCount < 2) {
+            setTimeout(() => {
+              this.initHost(roomId, retryCount + 1).then(resolve).catch(reject)
+            }, 1200)
+            return
+          }
           this.initHost().then(resolve).catch(reject)
           return
         }

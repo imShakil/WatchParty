@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import Hls from 'hls.js'
 import { parseMediaUrl } from '@/utils/mediaUrl'
+import { YouTubePlayer } from '@/components/player/YouTubePlayer'
+import type { UnifiedPlayerRef } from '@/types/player.types'
 import {
   Play,
   Pause,
@@ -12,7 +14,6 @@ import {
   RotateCw,
   Loader2,
   Lock,
-  Tv,
 } from 'lucide-react'
 
 interface PartyPlayerProps {
@@ -21,6 +22,7 @@ interface PartyPlayerProps {
   isHost: boolean
   isHostOnlyControl: boolean
   videoRef: React.RefObject<HTMLVideoElement | null>
+  controllerRef?: React.MutableRefObject<UnifiedPlayerRef | null>
   onPlay: () => void
   onPause: () => void
   onSeek: (time: number) => void
@@ -44,6 +46,7 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
   isHost,
   isHostOnlyControl,
   videoRef,
+  controllerRef,
   onPlay,
   onPause,
   onSeek,
@@ -62,14 +65,14 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
   const hideControlsTimer = useRef<number | null>(null)
 
   const parsedMedia = useMemo(() => parseMediaUrl(streamUrl), [streamUrl])
-  const { normalizedUrl, isEmbed, isYouTube } = parsedMedia
+  const { normalizedUrl, isEmbed, isYouTube, youtubeId } = parsedMedia
 
   const canControl = !isHostOnlyControl || isHost
 
   // Setup HLS / Stream playback
   useEffect(() => {
     const video = videoRef.current
-    if (!video || !normalizedUrl || isEmbed) return
+    if (!video || !normalizedUrl || isEmbed || isYouTube) return
 
     let hls: Hls | null = null
 
@@ -107,7 +110,7 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
         hls.destroy()
       }
     }
-  }, [normalizedUrl, isEmbed, videoRef])
+  }, [normalizedUrl, isEmbed, isYouTube, videoRef])
 
   // Video event listeners
   useEffect(() => {
@@ -169,6 +172,18 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
 
   const togglePlay = () => {
     if (!canControl) return
+    if (controllerRef?.current) {
+      if (isPlaying) {
+        controllerRef.current.pause()
+        setIsPlaying(false)
+        onPause()
+      } else {
+        controllerRef.current.play()
+        setIsPlaying(true)
+        onPlay()
+      }
+      return
+    }
     const video = videoRef.current
     if (!video) return
 
@@ -183,6 +198,12 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
   const handleSeekChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!canControl) return
     const newTime = parseFloat(e.target.value)
+    if (controllerRef?.current) {
+      controllerRef.current.seekTo(newTime)
+      setCurrentTime(newTime)
+      onSeek(newTime)
+      return
+    }
     const video = videoRef.current
     if (video) {
       video.currentTime = newTime
@@ -193,6 +214,13 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
 
   const skipTime = (seconds: number) => {
     if (!canControl) return
+    if (controllerRef?.current) {
+      const target = Math.max(0, Math.min(duration || 0, currentTime + seconds))
+      controllerRef.current.seekTo(target)
+      setCurrentTime(target)
+      onSeek(target)
+      return
+    }
     const video = videoRef.current
     if (video) {
       const target = Math.max(0, Math.min(video.duration || 0, video.currentTime + seconds))
@@ -203,6 +231,12 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
   }
 
   const toggleMute = () => {
+    if (controllerRef?.current) {
+      const nextMute = !isMuted
+      controllerRef.current.setMuted(nextMute)
+      setIsMuted(nextMute)
+      return
+    }
     const video = videoRef.current
     if (!video) return
     const nextMute = !isMuted
@@ -212,6 +246,12 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newVol = parseFloat(e.target.value)
+    if (controllerRef?.current) {
+      controllerRef.current.setVolume(newVol)
+      setVolume(newVol)
+      setIsMuted(newVol === 0)
+      return
+    }
     const video = videoRef.current
     if (video) {
       video.volume = newVol
@@ -231,6 +271,21 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
     }
   }
 
+  const handleYouTubePlay = useCallback(() => {
+    setIsPlaying(true)
+    onPlay()
+  }, [onPlay])
+
+  const handleYouTubePause = useCallback(() => {
+    setIsPlaying(false)
+    onPause()
+  }, [onPause])
+
+  const handleYouTubeTimeUpdate = useCallback((cur: number, dur: number) => {
+    setCurrentTime(cur)
+    if (dur > 0) setDuration(dur)
+  }, [])
+
   return (
     <div
       ref={containerRef}
@@ -239,37 +294,27 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
       onClick={triggerUserActivity}
       style={{ cursor: showControls ? 'default' : 'none' }}
     >
-      {/* If Embed iFrame */}
-      {isEmbed ? (
-        <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
-          <div
-            style={{
-              padding: '0.6rem 1rem',
-              background: 'rgba(139, 92, 246, 0.15)',
-              borderBottom: '1px solid rgba(139, 92, 246, 0.3)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              fontSize: '0.85rem',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#c4b5fd' }}>
-              <Tv size={16} />
-              <span>
-                {isYouTube
-                  ? 'YouTube Source Active — Chat & react in real-time with your friends!'
-                  : 'Embed Source Active — Use real-time chat & countdown to sync with your friend!'}
-              </span>
-            </div>
-          </div>
-          <iframe
-            src={normalizedUrl}
-            title={isYouTube ? 'YouTube Party Stream' : 'Party Embed Stream'}
-            style={{ width: '100%', height: '100%', border: 'none' }}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowFullScreen
+      {/* If YouTube source with sync API */}
+      {isYouTube && youtubeId ? (
+        <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+          <YouTubePlayer
+            videoId={youtubeId}
+            canControl={canControl}
+            onPlay={handleYouTubePlay}
+            onPause={handleYouTubePause}
+            onBuffering={onBuffering}
+            controllerRef={controllerRef}
+            onTimeUpdate={handleYouTubeTimeUpdate}
           />
         </div>
+      ) : isEmbed ? (
+        <iframe
+          src={normalizedUrl}
+          title={isYouTube ? 'YouTube Party Stream' : 'Party Embed Stream'}
+          style={{ width: '100%', height: '100%', border: 'none' }}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowFullScreen
+        />
       ) : (
         <>
           {/* Main Video Element */}

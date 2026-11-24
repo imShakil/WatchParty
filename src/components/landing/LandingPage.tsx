@@ -1,0 +1,1047 @@
+import React, { useState, useCallback } from 'react'
+import {
+  Play,
+  LogIn,
+  Tv,
+  Film,
+  Sparkles,
+  Zap,
+  ShieldCheck,
+  ExternalLink,
+  ChevronRight,
+  Hash,
+  User,
+  Clapperboard,
+  Flame,
+} from 'lucide-react'
+
+interface LandingPageProps {
+  userName: string
+  onSaveName: (name: string) => void
+  onHostParty: (streamUrl?: string, title?: string, customRoomId?: string, posterUrl?: string) => void
+  onJoinParty: (roomId: string) => void
+}
+
+interface FeaturedTitle {
+  id: string
+  title: string
+  type: string
+  tag: string
+  poster: string
+  streamUrl: string
+}
+
+const CINEMA_POSTERS_ROW_1 = [
+  'https://image.tmdb.org/t/p/w500/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg', // Dune 2
+  'https://image.tmdb.org/t/p/w500/49WJfeN0moxb9IPfGn8AIqMGskD.jpg', // Stranger Things
+  'https://image.tmdb.org/t/p/w500/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg', // Interstellar
+  'https://image.tmdb.org/t/p/w500/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg', // Oppenheimer
+  'https://image.tmdb.org/t/p/w500/8Vt6mWEReuy4Of61Lnj5Xj704m8.jpg', // Spider-Verse
+  'https://image.tmdb.org/t/p/w500/8cdWjvZQUExUUTzyp4t6EDMubfO.jpg', // Deadpool & Wolverine
+  'https://image.tmdb.org/t/p/w500/ggFHVNu6YYI5L9pCfOacjizRGt.jpg', // Breaking Bad
+  'https://image.tmdb.org/t/p/w500/qJ2tW6WMUDux911r6m7haRef0WH.jpg', // The Dark Knight
+]
+
+const CINEMA_POSTERS_ROW_2 = [
+  'https://image.tmdb.org/t/p/w500/fqldf2t8ztc9aiwn3k6mlX3tvRT.jpg', // Arcane
+  'https://image.tmdb.org/t/p/w500/oYuLEt3zVCKq57qu2F8dT7NIa6f.jpg', // Inception
+  'https://image.tmdb.org/t/p/w500/2cxhvwyEwRlysAmRH4iodkvo0z5.jpg', // Gladiator II
+  'https://image.tmdb.org/t/p/w500/1XS1oqL89opfnbLl8WnZY1O1uJx.jpg', // Game of Thrones
+  'https://image.tmdb.org/t/p/w500/74xTEgt7R36Fpooo50r9T25onhq.jpg', // The Batman
+  'https://image.tmdb.org/t/p/w500/or06FN3Dka5tukK1e9sl16pB3iy.jpg', // Avengers Endgame
+  'https://image.tmdb.org/t/p/w500/d5iIlFn5s0ImszYzBPb8JPIfbXD.jpg', // Pulp Fiction
+  'https://image.tmdb.org/t/p/w500/39wmItIWsg5sZMyRUHLkWBcuVCM.jpg', // Spirited Away
+]
+
+const FEATURED_TITLES: FeaturedTitle[] = [
+  {
+    id: 'dune-2',
+    title: 'Dune: Part Two',
+    type: 'Movie',
+    tag: 'Sci-Fi • 4K',
+    poster: 'https://image.tmdb.org/t/p/w500/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg',
+    streamUrl: 'https://www.youtube.com/watch?v=Way9Dexny3w',
+  },
+  {
+    id: 'stranger-things',
+    title: 'Stranger Things',
+    type: 'Series',
+    tag: 'Sci-Fi • Season 4',
+    poster: 'https://image.tmdb.org/t/p/w500/49WJfeN0moxb9IPfGn8AIqMGskD.jpg',
+    streamUrl: 'https://www.youtube.com/watch?v=b9EkMc79ZSU',
+  },
+  {
+    id: 'interstellar',
+    title: 'Interstellar',
+    type: 'Movie',
+    tag: 'Sci-Fi • Masterpiece',
+    poster: 'https://image.tmdb.org/t/p/w500/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg',
+    streamUrl: 'https://www.youtube.com/watch?v=zSWdZVtXT7E',
+  },
+  {
+    id: 'arcane',
+    title: 'Arcane',
+    type: 'Series',
+    tag: 'Animation • Season 2',
+    poster: 'https://image.tmdb.org/t/p/w500/fqldf2t8ztc9aiwn3k6mlX3tvRT.jpg',
+    streamUrl: 'https://www.youtube.com/watch?v=fXmAurh012s',
+  },
+  {
+    id: 'oppenheimer',
+    title: 'Oppenheimer',
+    type: 'Movie',
+    tag: 'Drama • Oscar Winner',
+    poster: 'https://image.tmdb.org/t/p/w500/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg',
+    streamUrl: 'https://www.youtube.com/watch?v=uYPbbksJxIg',
+  },
+  {
+    id: 'the-batman',
+    title: 'The Batman',
+    type: 'Movie',
+    tag: 'Action • Dark Knight',
+    poster: 'https://image.tmdb.org/t/p/w500/74xTEgt7R36Fpooo50r9T25onhq.jpg',
+    streamUrl: 'https://www.youtube.com/watch?v=mqqft2x_Aa4',
+  },
+]
+
+export const LandingPage: React.FC<LandingPageProps> = ({
+  userName,
+  onSaveName,
+  onHostParty,
+  onJoinParty,
+}) => {
+  const [name, setName] = useState<string>(userName)
+  const [joinCode, setJoinCode] = useState<string>('')
+  const [partyName, setPartyName] = useState<string>('')
+  const [customSlug, setCustomSlug] = useState<string>('')
+  const [showAdvancedSlug, setShowAdvancedSlug] = useState<boolean>(false)
+
+  const handleHost = (e: React.FormEvent) => {
+    e.preventDefault()
+    onSaveName(name.trim() || userName)
+    const sanitizedSlug = customSlug.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '')
+    onHostParty(
+      undefined,
+      partyName.trim() || 'My Watch Party',
+      sanitizedSlug || undefined
+    )
+  }
+
+  const handleJoin = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!joinCode.trim()) return
+    onSaveName(name.trim() || userName)
+    onJoinParty(joinCode.trim())
+  }
+
+  const handleQuickStartParty = useCallback(
+    (item: FeaturedTitle) => {
+      onSaveName(name.trim() || userName)
+      const slug = `${item.id}-${item.streamUrl.slice(-6).replace(/[^a-z0-9_-]/g, '')}`
+      onHostParty(item.streamUrl, `${item.title} Watch Party`, slug, item.poster)
+    },
+    [name, userName, onSaveName, onHostParty]
+  )
+
+  return (
+    <div
+      style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(180deg, #100b1a 0%, #0c0e17 28%, #08090c 100%)',
+        color: 'var(--text-main)',
+        display: 'flex',
+        flexDirection: 'column',
+        overflowX: 'hidden',
+        position: 'relative',
+      }}
+    >
+      {/* Top Navbar */}
+      <nav
+        style={{
+          height: '70px',
+          padding: '0 2rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+          background: 'rgba(12, 14, 23, 0.85)',
+          backdropFilter: 'var(--backdrop-blur)',
+          position: 'sticky',
+          top: 0,
+          zIndex: 50,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <img
+            src="/uploads/dekho-prime-icon-header-128.webp"
+            alt="Dekho Prime"
+            style={{ width: '32px', height: '32px', objectFit: 'contain' }}
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontWeight: 800,
+                fontSize: '1.35rem',
+                letterSpacing: '-0.02em',
+                color: 'var(--text-main)',
+              }}
+            >
+              Dekho<span style={{ color: 'var(--primary-red, #ea383e)' }}>Prime</span>
+            </span>
+            <span
+              style={{
+                fontSize: '0.675rem',
+                fontWeight: 800,
+                padding: '0.15rem 0.5rem',
+                borderRadius: 'var(--radius-sm)',
+                background: 'rgba(234, 56, 62, 0.18)',
+                color: '#ea383e',
+                border: '1px solid rgba(234, 56, 62, 0.35)',
+                letterSpacing: '0.05em',
+              }}
+            >
+              PARTY
+            </span>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <a
+            href="https://dekhoprime.live"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-action"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              fontSize: '0.825rem',
+              textDecoration: 'none',
+              color: 'var(--text-muted)',
+              background: 'rgba(255, 255, 255, 0.04)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+            }}
+          >
+            <Tv size={15} color="#ea383e" />
+            <span>Dekho Prime Web</span>
+            <ExternalLink size={13} />
+          </a>
+        </div>
+      </nav>
+
+      {/* Hero Section */}
+      <section
+        style={{
+          position: 'relative',
+          padding: '4.5rem 1.5rem 3.5rem',
+          maxWidth: '1360px',
+          margin: '0 auto',
+          width: '100%',
+          textAlign: 'center',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Cinema Projector Overhead Spotlight */}
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            top: '-40px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: '100%',
+            maxWidth: '960px',
+            height: '480px',
+            background:
+              'radial-gradient(ellipse 70% 50% at 50% 0%, rgba(234, 56, 62, 0.28) 0%, rgba(139, 92, 246, 0.16) 40%, transparent 75%)',
+            pointerEvents: 'none',
+            zIndex: 0,
+          }}
+        />
+
+        {/* Ambient Movie Theater Backdrop Wall: Visible Scrolling Rows */}
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            inset: '-10% -20% 0 -20%',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1rem',
+            opacity: 0.32,
+            filter: 'contrast(1.1) saturate(1.2)',
+            pointerEvents: 'none',
+            zIndex: 0,
+            maskImage:
+              'radial-gradient(ellipse 90% 80% at 50% 35%, rgba(0, 0, 0, 0.85) 15%, rgba(0, 0, 0, 0.3) 65%, transparent 95%)',
+            WebkitMaskImage:
+              'radial-gradient(ellipse 90% 80% at 50% 35%, rgba(0, 0, 0, 0.85) 15%, rgba(0, 0, 0, 0.3) 65%, transparent 95%)',
+          }}
+        >
+          {/* Row 1: Forward Marquee */}
+          <div className="cinema-marquee-row">
+            {CINEMA_POSTERS_ROW_1.concat(CINEMA_POSTERS_ROW_1).map((src, i) => (
+              <div
+                key={`row1-${i}`}
+                style={{
+                  width: '140px',
+                  aspectRatio: '2/3',
+                  borderRadius: 'var(--radius-md)',
+                  overflow: 'hidden',
+                  background: '#151822',
+                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.65)',
+                  flexShrink: 0,
+                }}
+              >
+                <img
+                  src={src}
+                  alt=""
+                  loading="lazy"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* Row 2: Reverse Marquee */}
+          <div className="cinema-marquee-row reverse">
+            {CINEMA_POSTERS_ROW_2.concat(CINEMA_POSTERS_ROW_2).map((src, i) => (
+              <div
+                key={`row2-${i}`}
+                style={{
+                  width: '140px',
+                  aspectRatio: '2/3',
+                  borderRadius: 'var(--radius-md)',
+                  overflow: 'hidden',
+                  background: '#151822',
+                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.65)',
+                  flexShrink: 0,
+                }}
+              >
+                <img
+                  src={src}
+                  alt=""
+                  loading="lazy"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Foreground Content */}
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          {/* Eyebrow Badge */}
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              padding: '0.4rem 1rem',
+              borderRadius: 'var(--radius-full)',
+              background: 'rgba(234, 56, 62, 0.16)',
+              border: '1px solid rgba(234, 56, 62, 0.35)',
+              fontSize: '0.825rem',
+              color: '#fecaca',
+              fontWeight: 600,
+              marginBottom: '1.25rem',
+              backdropFilter: 'blur(8px)',
+              boxShadow: '0 4px 16px rgba(234, 56, 62, 0.15)',
+            }}
+          >
+            <Sparkles size={14} color="#ea383e" />
+            <span>Watch Movies & Series With Friends</span>
+          </div>
+
+          {/* Main Headline */}
+          <h1
+            style={{
+              fontSize: 'clamp(2.4rem, 5.5vw, 4.2rem)',
+              fontWeight: 800,
+              lineHeight: 1.15,
+              letterSpacing: '-0.03em',
+              fontFamily: 'var(--font-display)',
+              maxWidth: '860px',
+              margin: '0 auto 1.25rem',
+              textShadow: '0 4px 20px rgba(0, 0, 0, 0.8)',
+            }}
+          >
+            Watch Movies Together.{' '}
+            <span
+              style={{
+                background: 'linear-gradient(135deg, #ea383e 0%, #f43f5e 60%, #ec4899 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+              }}
+            >
+              Synced to the Second.
+            </span>
+          </h1>
+
+          {/* Polished Subtitle */}
+          <p
+            style={{
+              fontSize: 'clamp(1rem, 2vw, 1.2rem)',
+              color: '#cbd5e1',
+              maxWidth: '660px',
+              margin: '0 auto 2.25rem',
+              lineHeight: 1.6,
+              textShadow: '0 2px 10px rgba(0, 0, 0, 0.6)',
+            }}
+          >
+            Stream movies, series, YouTube videos, and local files with friends. When you play, pause, or rewind, everyone stays in lockstep. Zero lag, no accounts needed.
+          </p>
+
+          {/* Quick Nickname Pill */}
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              padding: '0.5rem 1.15rem',
+              background: 'rgba(15, 17, 23, 0.88)',
+              backdropFilter: 'blur(16px)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              borderRadius: 'var(--radius-full)',
+              marginBottom: '2.5rem',
+              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
+            }}
+          >
+            <User size={15} color="#ea383e" />
+            <span style={{ fontSize: '0.825rem', color: 'var(--text-dim)', fontWeight: 500 }}>
+              Your Name:
+            </span>
+            <input
+              type="text"
+              value={name}
+              maxLength={25}
+              onChange={(e) => {
+                setName(e.target.value)
+                onSaveName(e.target.value)
+              }}
+              placeholder="Viewer Name"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-main)',
+                fontSize: '0.85rem',
+                fontWeight: 600,
+                outline: 'none',
+                width: '135px',
+              }}
+            />
+          </div>
+
+          {/* Action Cards: Host or Join */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+              gap: '1.75rem',
+              maxWidth: '860px',
+              margin: '0 auto',
+              textAlign: 'left',
+            }}
+          >
+            {/* Host Party Box */}
+            <form
+              onSubmit={handleHost}
+              style={{
+                background: 'rgba(18, 21, 31, 0.82)',
+                backdropFilter: 'blur(20px)',
+                borderRadius: 'var(--radius-lg)',
+                border: '1px solid rgba(234, 56, 62, 0.3)',
+                boxShadow: '0 16px 36px rgba(0, 0, 0, 0.6), 0 0 20px rgba(234, 56, 62, 0.15)',
+                padding: '1.75rem',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                gap: '1.25rem',
+              }}
+            >
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.5rem' }}>
+                  <div
+                    style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: 'var(--radius-md)',
+                      background: 'rgba(234, 56, 62, 0.2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Play size={18} color="#ea383e" fill="#ea383e" />
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: '1.2rem', fontWeight: 700 }}>Host a Watch Party</h3>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>
+                      Create a room in seconds and share your invite link.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                      Party Name
+                    </label>
+                    <input
+                      type="text"
+                      value={partyName}
+                      maxLength={40}
+                      onChange={(e) => setPartyName(e.target.value)}
+                      placeholder="e.g. Dune 2 Movie Night"
+                      style={{
+                        width: '100%',
+                        padding: '0.65rem 0.85rem',
+                        borderRadius: 'var(--radius-md)',
+                        background: 'rgba(10, 12, 18, 0.85)',
+                        border: '1px solid rgba(255, 255, 255, 0.12)',
+                        color: 'var(--text-main)',
+                        fontSize: '0.85rem',
+                        outline: 'none',
+                        marginTop: '0.25rem',
+                      }}
+                    />
+                  </div>
+
+                  {showAdvancedSlug ? (
+                    <div>
+                      <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                        <Hash size={12} color="#ea383e" /> Custom Room ID (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={customSlug}
+                        maxLength={24}
+                        onChange={(e) => setCustomSlug(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
+                        placeholder="e.g. movie-night"
+                        style={{
+                          width: '100%',
+                          padding: '0.65rem 0.85rem',
+                          borderRadius: 'var(--radius-md)',
+                          background: 'rgba(10, 12, 18, 0.85)',
+                          border: '1px solid rgba(255, 255, 255, 0.12)',
+                          color: 'var(--text-main)',
+                          fontSize: '0.85rem',
+                          outline: 'none',
+                          marginTop: '0.25rem',
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowAdvancedSlug(true)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#ea383e',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        padding: 0,
+                      }}
+                    >
+                      + Set Custom Room ID
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="btn-action btn-primary"
+                style={{ width: '100%', justifyContent: 'center', padding: '0.85rem', fontSize: '0.95rem' }}
+              >
+                <Play size={16} fill="#fff" />
+                <span>Create Watch Room</span>
+                <ChevronRight size={16} />
+              </button>
+            </form>
+
+            {/* Join Party Box */}
+            <form
+              onSubmit={handleJoin}
+              style={{
+                background: 'rgba(18, 21, 31, 0.82)',
+                backdropFilter: 'blur(20px)',
+                borderRadius: 'var(--radius-lg)',
+                border: '1px solid rgba(6, 182, 212, 0.3)',
+                boxShadow: '0 16px 36px rgba(0, 0, 0, 0.6), 0 0 20px rgba(6, 182, 212, 0.1)',
+                padding: '1.75rem',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                gap: '1.25rem',
+              }}
+            >
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.5rem' }}>
+                  <div
+                    style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: 'var(--radius-md)',
+                      background: 'rgba(6, 182, 212, 0.2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <LogIn size={18} color="var(--accent-cyan)" />
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: '1.2rem', fontWeight: 700 }}>Join a Watch Party</h3>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>
+                      Enter a room code or paste an invite link to jump in.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                    Room ID or Party URL
+                  </label>
+                  <input
+                    type="text"
+                    value={joinCode}
+                    onChange={(e) => {
+                      const val = e.target.value.trim()
+                      const match = val.match(/\/room\/([^/?#]+)/)
+                      if (match) {
+                        setJoinCode(match[1])
+                      } else {
+                        setJoinCode(val)
+                      }
+                    }}
+                    placeholder="e.g. movie-night or dpwp-123456"
+                    style={{
+                      width: '100%',
+                      padding: '0.65rem 0.85rem',
+                      borderRadius: 'var(--radius-md)',
+                      background: 'rgba(10, 12, 18, 0.85)',
+                      border: '1px solid rgba(255, 255, 255, 0.12)',
+                      color: 'var(--text-main)',
+                      fontSize: '0.85rem',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={!joinCode.trim()}
+                className="btn-action"
+                style={{
+                  width: '100%',
+                  justifyContent: 'center',
+                  padding: '0.85rem',
+                  fontSize: '0.95rem',
+                  background: joinCode.trim() ? 'rgba(6, 182, 212, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                  borderColor: joinCode.trim() ? 'var(--accent-cyan)' : 'var(--border-subtle)',
+                  color: joinCode.trim() ? '#fff' : 'var(--text-dim)',
+                  cursor: joinCode.trim() ? 'pointer' : 'not-allowed',
+                }}
+              >
+                <LogIn size={16} />
+                <span>Join Party Now</span>
+                <ChevronRight size={16} />
+              </button>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      {/* Featured / Trending Movies & Shows Showcase */}
+      <section
+        style={{
+          padding: '2.5rem 1.5rem 3.5rem',
+          maxWidth: '1240px',
+          margin: '0 auto',
+          width: '100%',
+          position: 'relative',
+          zIndex: 1,
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '1.5rem',
+            flexWrap: 'wrap',
+            gap: '0.75rem',
+          }}
+        >
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+              <Flame size={18} color="#ea383e" />
+              <h2 style={{ fontSize: '1.4rem', fontWeight: 800, fontFamily: 'var(--font-display)' }}>
+                Popular for Watch Parties
+              </h2>
+            </div>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+              Pick a movie or show to launch a synchronized room instantly.
+            </p>
+          </div>
+
+          <a
+            href="https://dekhoprime.live"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: '0.8rem',
+              color: '#ea383e',
+              textDecoration: 'none',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.3rem',
+            }}
+          >
+            <span>Browse All Movies on Dekho Prime</span>
+            <ExternalLink size={13} />
+          </a>
+        </div>
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(175px, 1fr))',
+            gap: '1.25rem',
+          }}
+        >
+          {FEATURED_TITLES.map((item) => (
+            <div
+              key={item.id}
+              className="cinema-card"
+              style={{
+                background: 'rgba(21, 24, 34, 0.75)',
+                backdropFilter: 'blur(12px)',
+                borderRadius: 'var(--radius-lg)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
+              <div style={{ position: 'relative', aspectRatio: '2/3', overflow: 'hidden' }}>
+                <img
+                  src={item.poster}
+                  alt={item.title}
+                  loading="lazy"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: '0.5rem',
+                    left: '0.5rem',
+                    fontSize: '0.65rem',
+                    fontWeight: 700,
+                    padding: '0.2rem 0.5rem',
+                    borderRadius: 'var(--radius-sm)',
+                    background: 'rgba(10, 12, 18, 0.85)',
+                    backdropFilter: 'blur(6px)',
+                    color: '#fff',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                  }}
+                >
+                  {item.tag}
+                </span>
+              </div>
+
+              <div style={{ padding: '0.85rem', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between', gap: '0.75rem' }}>
+                <div>
+                  <h4
+                    style={{
+                      fontSize: '0.9rem',
+                      fontWeight: 700,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {item.title}
+                  </h4>
+                  <span style={{ fontSize: '0.725rem', color: 'var(--text-dim)' }}>{item.type}</span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleQuickStartParty(item)}
+                  className="btn-action"
+                  style={{
+                    width: '100%',
+                    padding: '0.45rem',
+                    fontSize: '0.75rem',
+                    justifyContent: 'center',
+                    background: 'rgba(234, 56, 62, 0.15)',
+                    borderColor: 'rgba(234, 56, 62, 0.35)',
+                    color: '#fca5a5',
+                  }}
+                >
+                  <Clapperboard size={13} color="#ea383e" />
+                  <span>Start Party</span>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Feature Showcase Grid */}
+      <section
+        style={{
+          padding: '3rem 1.5rem',
+          maxWidth: '1240px',
+          margin: '0 auto',
+          width: '100%',
+          position: 'relative',
+          zIndex: 1,
+        }}
+      >
+        <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
+          <h2
+            style={{
+              fontSize: '1.85rem',
+              fontWeight: 800,
+              fontFamily: 'var(--font-display)',
+              marginBottom: '0.5rem',
+            }}
+          >
+            Built for Movie Nights
+          </h2>
+          <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+            Synchronized playback, crystal-clear controls, zero distractions.
+          </p>
+        </div>
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+            gap: '1.5rem',
+          }}
+        >
+          {/* Card 1 */}
+          <div
+            style={{
+              background: 'rgba(21, 24, 34, 0.75)',
+              backdropFilter: 'blur(12px)',
+              borderRadius: 'var(--radius-lg)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              padding: '1.5rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.75rem',
+            }}
+          >
+            <div
+              style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: 'var(--radius-md)',
+                background: 'rgba(139, 92, 246, 0.18)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Zap size={20} color="var(--accent-purple)" />
+            </div>
+            <h4 style={{ fontSize: '1.05rem', fontWeight: 700 }}>Frame-Accurate Sync</h4>
+            <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              Play, pause, and seek stay aligned across every screen using direct peer connections. No buffering drift.
+            </p>
+          </div>
+
+          {/* Card 2 */}
+          <div
+            style={{
+              background: 'rgba(21, 24, 34, 0.75)',
+              backdropFilter: 'blur(12px)',
+              borderRadius: 'var(--radius-lg)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              padding: '1.5rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.75rem',
+            }}
+          >
+            <div
+              style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: 'var(--radius-md)',
+                background: 'rgba(236, 72, 153, 0.18)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Film size={20} color="var(--accent-pink)" />
+            </div>
+            <h4 style={{ fontSize: '1.05rem', fontWeight: 700 }}>Universal Media Engine</h4>
+            <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              Stream YouTube videos, live HLS feeds, direct MP4 links, or local video files from your device without uploading.
+            </p>
+          </div>
+
+          {/* Card 3 */}
+          <div
+            style={{
+              background: 'rgba(21, 24, 34, 0.75)',
+              backdropFilter: 'blur(12px)',
+              borderRadius: 'var(--radius-lg)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              padding: '1.5rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.75rem',
+            }}
+          >
+            <div
+              style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: 'var(--radius-md)',
+                background: 'rgba(16, 185, 129, 0.18)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Tv size={20} color="var(--success)" />
+            </div>
+            <h4 style={{ fontSize: '1.05rem', fontWeight: 700 }}>Distraction-Free Theater</h4>
+            <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              Clean fullscreen player with auto-hiding controls and a one-click theater mode so you focus on the story.
+            </p>
+          </div>
+
+          {/* Card 4 */}
+          <div
+            style={{
+              background: 'rgba(21, 24, 34, 0.75)',
+              backdropFilter: 'blur(12px)',
+              borderRadius: 'var(--radius-lg)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              padding: '1.5rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.75rem',
+            }}
+          >
+            <div
+              style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: 'var(--radius-md)',
+                background: 'rgba(59, 130, 246, 0.18)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <ShieldCheck size={20} color="#60a5fa" />
+            </div>
+            <h4 style={{ fontSize: '1.05rem', fontWeight: 700 }}>Private by Design</h4>
+            <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              Rooms run directly between you and your friends with zero tracking, no accounts, and no data stored on servers.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Dekho Prime Catalog Banner */}
+      <section
+        style={{
+          padding: '2rem 1.5rem 4rem',
+          maxWidth: '1240px',
+          margin: '0 auto',
+          width: '100%',
+          position: 'relative',
+          zIndex: 1,
+        }}
+      >
+        <div
+          style={{
+            background: 'linear-gradient(135deg, rgba(234, 56, 62, 0.18) 0%, rgba(139, 92, 246, 0.18) 100%)',
+            border: '1px solid rgba(234, 56, 62, 0.35)',
+            borderRadius: 'var(--radius-lg)',
+            padding: '2.5rem 2rem',
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '1.5rem',
+          }}
+        >
+          <div style={{ maxWidth: '640px' }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#fca5a5', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Connected to Dekho Prime
+            </span>
+            <h3 style={{ fontSize: '1.6rem', fontWeight: 800, marginTop: '0.35rem' }}>
+              Stream from the Dekho Prime Catalog
+            </h3>
+            <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '0.5rem', lineHeight: 1.5 }}>
+              Browse movies, TV series, anime, and live cricket matches on Dekho Prime, and start a watch party on any stream with one click.
+            </p>
+          </div>
+
+          <a
+            href="https://dekhoprime.live"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-action btn-primary"
+            style={{
+              padding: '0.85rem 1.5rem',
+              fontSize: '0.95rem',
+              textDecoration: 'none',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.6rem',
+            }}
+          >
+            <span>Explore Dekho Prime Catalog</span>
+            <ExternalLink size={16} />
+          </a>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer
+        style={{
+          marginTop: 'auto',
+          padding: '2rem 1.5rem',
+          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+          textAlign: 'center',
+          fontSize: '0.8rem',
+          color: 'var(--text-dim)',
+          background: 'rgba(10, 12, 18, 0.95)',
+          position: 'relative',
+          zIndex: 1,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+          <img
+            src="/uploads/dekho-prime-icon-header-128.webp"
+            alt="Dekho Prime"
+            style={{ width: '18px', height: '18px', objectFit: 'contain' }}
+          />
+          <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>DekhoPrime Party</span>
+          <span>•</span>
+          <span>Part of the <a href="https://dekhoprime.live" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>Dekho Prime</a> ecosystem</span>
+        </div>
+        <p>© {new Date().getFullYear()} Dekho Prime. Real-time synchronized watch party.</p>
+      </footer>
+    </div>
+  )
+}

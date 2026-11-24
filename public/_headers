@@ -1,0 +1,12 @@
+# Security & Caching Headers for Cloudflare Pages
+/room/*
+  X-Service-Name: Dekho-Party-Engine
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: SAMEORIGIN
+  Referrer-Policy: strict-origin-when-cross-origin
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+

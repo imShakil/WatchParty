@@ -11,6 +11,8 @@ export type PartyMessageType =
   | 'JOIN_REQUEST'
   | 'JOIN_ACK'
   | 'CONTROL_MODE_CHANGE'
+  | 'PARTICIPANT_INFO'
+  | 'PARTICIPANT_ROSTER'
 
 export interface SyncPayload {
   isPlaying: boolean

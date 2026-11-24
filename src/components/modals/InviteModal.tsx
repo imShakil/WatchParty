@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { X, Copy, Check, Share2, Sparkles } from 'lucide-react'
+import { getPartyShareUrl } from '@/utils/routeUtils'
 
 interface InviteModalProps {
   isOpen: boolean
@@ -13,7 +14,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, roomId, roomTi
 
   if (!isOpen) return null
 
-  const inviteLink = `${window.location.origin}/?room=${encodeURIComponent(roomId)}`
+  const inviteLink = getPartyShareUrl(roomId)
 
   const handleCopy = () => {
     navigator.clipboard.writeText(inviteLink).then(() => {
@@ -66,8 +67,12 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, roomId, roomTi
       >
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            <span style={{ fontSize: '1.5rem' }}>🍿</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            <img
+              src="/uploads/dekho-prime-icon-header-128.webp"
+              alt="Dekho Prime"
+              style={{ width: '28px', height: '28px', objectFit: 'contain' }}
+            />
             <div>
               <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-main)' }}>
                 Invite to Watch Party
