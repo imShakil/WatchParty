@@ -14,6 +14,8 @@ export type PartyMessageType =
   | 'PARTICIPANT_INFO'
   | 'PARTICIPANT_ROSTER'
   | 'ROOM_CLOSED'
+  | 'TYPING_STATUS'
+  | 'PEER_LEFT'
 
 export interface SyncPayload {
   isPlaying: boolean
@@ -33,6 +35,9 @@ export interface ChatMessage {
   senderId: string
   senderName: string
   text: string
+  imageUrl?: string
+  audioUrl?: string
+  audioDuration?: number
   timestamp: number
   isSystem?: boolean
   isHost?: boolean

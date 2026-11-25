@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import {
   Play,
   LogIn,
@@ -14,6 +14,7 @@ import {
   Clapperboard,
   Flame,
 } from 'lucide-react'
+import { subscribeToActivePartyStats, type LivePartyStats } from '@/services/firebaseService'
 
 interface LandingPageProps {
   userName: string
@@ -115,6 +116,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const [partyName, setPartyName] = useState<string>('')
   const [customSlug, setCustomSlug] = useState<string>('')
   const [showAdvancedSlug, setShowAdvancedSlug] = useState<boolean>(false)
+  const [liveStats, setLiveStats] = useState<LivePartyStats>({ activeRooms: 0, activeViewers: 0 })
+
+  useEffect(() => {
+    const unsub = subscribeToActivePartyStats((stats) => {
+      setLiveStats(stats)
+    })
+    return () => unsub()
+  }, [])
 
   const handleHost = (e: React.FormEvent) => {
     e.preventDefault()
@@ -158,21 +167,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       }}
     >
       {/* Top Navbar */}
-      <nav
-        style={{
-          height: '70px',
-          padding: '0 2rem',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-          background: 'rgba(12, 14, 23, 0.85)',
-          backdropFilter: 'var(--backdrop-blur)',
-          position: 'sticky',
-          top: 0,
-          zIndex: 50,
-        }}
-      >
+      <nav className="landing-nav">
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <img
             src="/uploads/dekho-prime-icon-header-128.webp"
@@ -226,24 +221,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             }}
           >
             <Tv size={15} color="#ea383e" />
-            <span>Dekho Prime Web</span>
+            <span className="hide-on-xs">Dekho Prime Web</span>
             <ExternalLink size={13} />
           </a>
         </div>
       </nav>
 
       {/* Hero Section */}
-      <section
-        style={{
-          position: 'relative',
-          padding: '4.5rem 1.5rem 3.5rem',
-          maxWidth: '1360px',
-          margin: '0 auto',
-          width: '100%',
-          textAlign: 'center',
-          overflow: 'hidden',
-        }}
-      >
+      <section className="landing-hero-section">
         {/* Cinema Projector Overhead Spotlight */}
         <div
           aria-hidden="true"
@@ -284,18 +269,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           {/* Row 1: Forward Marquee */}
           <div className="cinema-marquee-row">
             {CINEMA_POSTERS_ROW_1.concat(CINEMA_POSTERS_ROW_1).map((src, i) => (
-              <div
-                key={`row1-${i}`}
-                style={{
-                  width: '140px',
-                  aspectRatio: '2/3',
-                  borderRadius: 'var(--radius-md)',
-                  overflow: 'hidden',
-                  background: '#151822',
-                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.65)',
-                  flexShrink: 0,
-                }}
-              >
+              <div key={`row1-${i}`} className="marquee-card">
                 <img
                   src={src}
                   alt=""
@@ -309,18 +283,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           {/* Row 2: Reverse Marquee */}
           <div className="cinema-marquee-row reverse">
             {CINEMA_POSTERS_ROW_2.concat(CINEMA_POSTERS_ROW_2).map((src, i) => (
-              <div
-                key={`row2-${i}`}
-                style={{
-                  width: '140px',
-                  aspectRatio: '2/3',
-                  borderRadius: 'var(--radius-md)',
-                  overflow: 'hidden',
-                  background: '#151822',
-                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.65)',
-                  flexShrink: 0,
-                }}
-              >
+              <div key={`row2-${i}`} className="marquee-card">
                 <img
                   src={src}
                   alt=""
@@ -342,24 +305,33 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               gap: '0.5rem',
               padding: '0.4rem 1rem',
               borderRadius: 'var(--radius-full)',
-              background: 'rgba(234, 56, 62, 0.16)',
-              border: '1px solid rgba(234, 56, 62, 0.35)',
+              background: liveStats.activeRooms > 0 ? 'rgba(16, 185, 129, 0.16)' : 'rgba(234, 56, 62, 0.16)',
+              border: liveStats.activeRooms > 0 ? '1px solid rgba(16, 185, 129, 0.35)' : '1px solid rgba(234, 56, 62, 0.35)',
               fontSize: '0.825rem',
-              color: '#fecaca',
+              color: liveStats.activeRooms > 0 ? '#a7f3d0' : '#fecaca',
               fontWeight: 600,
               marginBottom: '1.25rem',
               backdropFilter: 'blur(8px)',
-              boxShadow: '0 4px 16px rgba(234, 56, 62, 0.15)',
+              boxShadow: liveStats.activeRooms > 0 ? '0 4px 16px rgba(16, 185, 129, 0.15)' : '0 4px 16px rgba(234, 56, 62, 0.15)',
             }}
           >
-            <Sparkles size={14} color="#ea383e" />
-            <span>Watch Movies & Series With Friends</span>
+            {liveStats.activeRooms > 0 ? (
+              <>
+                <span className="status-dot" style={{ backgroundColor: '#10b981', boxShadow: '0 0 8px #10b981' }} />
+                <span>{liveStats.activeRooms} Live {liveStats.activeRooms === 1 ? 'Party' : 'Parties'} • {liveStats.activeViewers} Watching</span>
+              </>
+            ) : (
+              <>
+                <Sparkles size={14} color="#ea383e" />
+                <span>Watch Movies & Series With Friends</span>
+              </>
+            )}
           </div>
 
           {/* Main Headline */}
           <h1
             style={{
-              fontSize: 'clamp(2.4rem, 5.5vw, 4.2rem)',
+              fontSize: 'clamp(1.85rem, 6vw, 3.8rem)',
               fontWeight: 800,
               lineHeight: 1.15,
               letterSpacing: '-0.03em',
@@ -384,7 +356,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           {/* Polished Subtitle */}
           <p
             style={{
-              fontSize: 'clamp(1rem, 2vw, 1.2rem)',
+              fontSize: 'clamp(0.9rem, 3.5vw, 1.15rem)',
               color: '#cbd5e1',
               maxWidth: '660px',
               margin: '0 auto 2.25rem',
@@ -439,8 +411,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-              gap: '1.75rem',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
+              gap: '1.5rem',
               maxWidth: '860px',
               margin: '0 auto',
               textAlign: 'left',
@@ -715,8 +687,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(175px, 1fr))',
-            gap: '1.25rem',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(135px, 1fr))',
+            gap: '1rem',
           }}
         >
           {FEATURED_TITLES.map((item) => (

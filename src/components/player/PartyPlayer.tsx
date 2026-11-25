@@ -503,24 +503,14 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
 
           {/* Video Controls Overlay */}
           <div
+            className="player-controls-overlay"
             style={{
-              position: 'absolute',
-              bottom: 0,
-              left: 0,
-              right: 0,
-              padding: '1.5rem',
-              background: 'linear-gradient(transparent, rgba(0, 0, 0, 0.95))',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.75rem',
-              transition: 'opacity 0.3s ease',
               opacity: showControls ? 1 : 0,
               pointerEvents: showControls ? 'auto' : 'none',
-              zIndex: 30,
             }}
           >
             {/* Scrubber Progress Bar */}
-            <div style={{ position: 'relative', width: '100%', height: '6px', display: 'flex', alignItems: 'center' }}>
+            <div style={{ position: 'relative', width: '100%', height: '12px', display: 'flex', alignItems: 'center' }}>
               {/* Buffer track */}
               <div
                 style={{
@@ -543,7 +533,7 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
                 onChange={handleSeekChange}
                 style={{
                   width: '100%',
-                  height: '6px',
+                  height: '10px',
                   cursor: canControl ? 'pointer' : 'not-allowed',
                   accentColor: 'var(--accent-purple)',
                 }}
@@ -551,23 +541,25 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
             </div>
 
             {/* Bottom Controls Row */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 {/* Play/Pause */}
                 <button
                   onClick={togglePlay}
                   disabled={!canControl}
                   className="btn-icon"
                   style={{
-                    width: '38px',
-                    height: '38px',
+                    width: '34px',
+                    height: '34px',
+                    padding: 0,
                     borderRadius: '50%',
                     background: 'var(--accent-purple)',
                     border: 'none',
+                    flexShrink: 0,
                   }}
                   title={isPlaying ? 'Pause' : 'Play'}
                 >
-                  {isPlaying ? <Pause size={18} fill="#fff" /> : <Play size={18} fill="#fff" />}
+                  {isPlaying ? <Pause size={16} fill="#fff" /> : <Play size={16} fill="#fff" />}
                 </button>
 
                 {/* Skip 10s */}
@@ -575,31 +567,31 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
                   onClick={() => skipTime(-10)}
                   disabled={!canControl}
                   className="btn-icon"
-                  style={{ padding: '0.4rem' }}
+                  style={{ padding: '0.35rem' }}
                   title="Rewind 10s"
                 >
-                  <RotateCcw size={16} />
+                  <RotateCcw size={15} />
                 </button>
                 <button
                   onClick={() => skipTime(10)}
                   disabled={!canControl}
                   className="btn-icon"
-                  style={{ padding: '0.4rem' }}
+                  style={{ padding: '0.35rem' }}
                   title="Forward 10s"
                 >
-                  <RotateCw size={16} />
+                  <RotateCw size={15} />
                 </button>
 
                 {/* Time Display */}
-                <span style={{ fontSize: '0.825rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
                   {formatTime(currentTime)} / {formatTime(duration)}
                 </span>
               </div>
 
               {/* Volume & Fullscreen */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <button onClick={toggleMute} className="btn-icon" style={{ padding: '0.4rem' }}>
-                  {isMuted || volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <button onClick={toggleMute} className="btn-icon" style={{ padding: '0.35rem' }} title={isMuted ? 'Unmute' : 'Mute'}>
+                  {isMuted || volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
                 </button>
                 <input
                   type="range"
@@ -608,10 +600,11 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
                   step={0.05}
                   value={isMuted ? 0 : volume}
                   onChange={handleVolumeChange}
-                  style={{ width: '70px', accentColor: 'var(--accent-purple)', cursor: 'pointer' }}
+                  className="hide-on-mobile"
+                  style={{ width: '60px', accentColor: 'var(--accent-purple)', cursor: 'pointer' }}
                 />
-                <button onClick={toggleFullscreen} className="btn-icon" style={{ padding: '0.4rem' }}>
-                  {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
+                <button onClick={toggleFullscreen} className="btn-icon" style={{ padding: '0.35rem' }} title="Fullscreen">
+                  {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
                 </button>
               </div>
             </div>

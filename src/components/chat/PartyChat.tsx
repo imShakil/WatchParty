@@ -1,31 +1,77 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Send, Users, MessageSquare, Shield, Smile, ToggleLeft, ToggleRight } from 'lucide-react'
+import { Send, Users, MessageSquare, Shield, Smile, ToggleLeft, ToggleRight, Image as ImageIcon, X, Mic } from 'lucide-react'
 import type { ChatMessage, Participant } from '@/types/party.types'
+import { MediaAttachmentModal } from './MediaAttachmentModal'
+import { VoiceNotePlayer } from './VoiceNotePlayer'
+import { VoiceRecorder } from './VoiceRecorder'
 
 interface PartyChatProps {
   messages: ChatMessage[]
   participants: Participant[]
+  typingUsers?: string[]
   isHost: boolean
   isHostOnlyControl: boolean
   onToggleControlMode: () => void
-  onSendMessage: (text: string) => void
+  onSendMessage: (text: string, imageUrl?: string, audioUrl?: string, audioDuration?: number) => void
+  onSendTypingStatus?: (isTyping: boolean) => void
   onTriggerReaction: (emoji: string) => void
 }
 
-const REACTION_EMOJIS = ['❤️', '😂', '🍿', '🔥', '😮', '👏', '🎉']
+const REACTION_EMOJIS = ['❤️', '😂', '😭', '😱', '🍿', '🔥', '😮', '👏', '🎉', '👻']
+
+const CHAT_INPUT_EMOJIS = [
+  '😀', '😂', '🤣', '😍', '🥰', '😎', '🥳', '🥺', '😭', '😱',
+  '🤯', '🔥', '🍿', '🎬', '👏', '👍', '🙌', '🎉', '👻', '💯',
+  '❤️', '💔', '👀', '✨', '🙏', '😜', '🤔', '💀', '😴', '💪',
+]
 
 export const PartyChat: React.FC<PartyChatProps> = ({
   messages,
   participants,
+  typingUsers = [],
   isHost,
   isHostOnlyControl,
   onToggleControlMode,
   onSendMessage,
+  onSendTypingStatus,
   onTriggerReaction,
 }) => {
   const [activeTab, setActiveTab] = useState<'chat' | 'people'>('chat')
   const [inputText, setInputText] = useState<string>('')
+  const [isMediaModalOpen, setIsMediaModalOpen] = useState<boolean>(false)
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null)
+  const [isVoiceRecording, setIsVoiceRecording] = useState<boolean>(false)
+  const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState<boolean>(false)
+  const emojiPickerRef = useRef<HTMLDivElement | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout>>(-1 as unknown as ReturnType<typeof setTimeout>)
+
+  // Close emoji picker on outside click or escape
+  useEffect(() => {
+    if (!isEmojiPickerOpen) return
+    const handleClickOutside = (e: MouseEvent) => {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target as Node)) {
+        setIsEmojiPickerOpen(false)
+      }
+    }
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsEmojiPickerOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isEmojiPickerOpen])
+
+  const handleInsertEmoji = (emoji: string) => {
+    setInputText((prev) => prev + emoji)
+    inputRef.current?.focus()
+  }
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -35,11 +81,38 @@ export const PartyChat: React.FC<PartyChatProps> = ({
     scrollToBottom()
   }, [messages])
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value
+    setInputText(val)
+
+    if (onSendTypingStatus) {
+      onSendTypingStatus(true)
+      clearTimeout(typingTimeoutRef.current)
+      typingTimeoutRef.current = setTimeout(() => {
+        onSendTypingStatus(false)
+      }, 2500)
+    }
+  }
+
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault()
     if (!inputText.trim()) return
+    clearTimeout(typingTimeoutRef.current)
+    onSendTypingStatus?.(false)
     onSendMessage(inputText)
     setInputText('')
+  }
+
+  const handleSendMedia = (imageUrl: string, caption?: string) => {
+    clearTimeout(typingTimeoutRef.current)
+    onSendTypingStatus?.(false)
+    onSendMessage(caption || '', imageUrl)
+  }
+
+  const handleSendVoice = (audioUrl: string, duration: number) => {
+    clearTimeout(typingTimeoutRef.current)
+    onSendTypingStatus?.(false)
+    onSendMessage('', undefined, audioUrl, duration)
   }
 
   return (
@@ -289,7 +362,7 @@ export const PartyChat: React.FC<PartyChatProps> = ({
 
                   <div
                     style={{
-                      padding: '0.6rem 0.85rem',
+                      padding: m.text ? '0.6rem 0.85rem' : '0.25rem',
                       borderRadius: isMe ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
                       background: isMe ? 'var(--accent-purple)' : 'var(--bg-surface)',
                       color: '#fff',
@@ -299,7 +372,44 @@ export const PartyChat: React.FC<PartyChatProps> = ({
                       lineHeight: 1.4,
                     }}
                   >
-                    {m.text}
+                    {m.imageUrl && (
+                      <div
+                        style={{
+                          marginBottom: m.text ? '0.45rem' : '0',
+                          borderRadius: '8px',
+                          overflow: 'hidden',
+                          background: '#090b10',
+                          maxWidth: '220px',
+                          maxHeight: '140px',
+                          position: 'relative',
+                        }}
+                      >
+                        <img
+                          src={m.imageUrl}
+                          alt="Attachment"
+                          loading="lazy"
+                          onClick={() => setLightboxImage(m.imageUrl || null)}
+                          style={{
+                            width: '100%',
+                            height: '140px',
+                            borderRadius: '8px',
+                            objectFit: 'cover',
+                            cursor: 'pointer',
+                            display: 'block',
+                          }}
+                        />
+                      </div>
+                    )}
+                    {m.audioUrl && (
+                      <div style={{ marginBottom: m.text ? '0.35rem' : '0' }}>
+                        <VoiceNotePlayer
+                          audioUrl={m.audioUrl}
+                          duration={m.audioDuration}
+                          isSenderMe={isMe}
+                        />
+                      </div>
+                    )}
+                    {m.text && <div>{m.text}</div>}
                   </div>
                 </div>
               )
@@ -307,15 +417,44 @@ export const PartyChat: React.FC<PartyChatProps> = ({
             <div ref={messagesEndRef} />
           </div>
 
+          {/* Typing Indicator Bar */}
+          {typingUsers.length > 0 && (
+            <div
+              style={{
+                padding: '0.35rem 0.85rem',
+                fontSize: '0.75rem',
+                color: 'var(--text-dim)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.45rem',
+                background: 'rgba(0, 0, 0, 0.35)',
+                borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+              }}
+            >
+              <span className="typing-dots">
+                <span />
+                <span />
+                <span />
+              </span>
+              <span>
+                {typingUsers.length === 1
+                  ? `${typingUsers[0]} is typing...`
+                  : typingUsers.length === 2
+                  ? `${typingUsers[0]} and ${typingUsers[1]} are typing...`
+                  : `${typingUsers[0]} and ${typingUsers.length - 1} others are typing...`}
+              </span>
+            </div>
+          )}
+
           {/* Quick Emoji Reactions Tray */}
           <div
             style={{
-              padding: '0.5rem 0.8rem',
+              padding: '0.4rem 0.6rem',
               background: 'rgba(0, 0, 0, 0.3)',
               borderTop: '1px solid var(--border-subtle)',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'space-between',
+              justifyContent: 'space-around',
             }}
           >
             {REACTION_EMOJIS.map((emoji) => (
@@ -327,9 +466,10 @@ export const PartyChat: React.FC<PartyChatProps> = ({
                   border: 'none',
                   fontSize: '1.25rem',
                   cursor: 'pointer',
-                  padding: '0.2rem',
+                  padding: '0.3rem',
                   borderRadius: '6px',
                   transition: 'transform 0.15s ease',
+                  touchAction: 'manipulation',
                 }}
                 onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.25)')}
                 onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
@@ -341,41 +481,290 @@ export const PartyChat: React.FC<PartyChatProps> = ({
           </div>
 
           {/* Message Input Form */}
-          <form
-            onSubmit={handleSend}
+          <div
+            className="chat-input-form"
             style={{
-              padding: '0.75rem 1rem',
-              background: 'var(--bg-secondary)',
+              padding: '0.65rem 0.85rem',
               borderTop: '1px solid var(--border-subtle)',
-              display: 'flex',
-              gap: '0.5rem',
+              background: 'var(--bg-main)',
+              position: 'relative',
+              width: '100%',
+              boxSizing: 'border-box',
             }}
           >
-            <input
-              type="text"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              placeholder="Say something to the room..."
+            {isVoiceRecording ? (
+              <VoiceRecorder
+                autoStart={true}
+                onSendVoice={handleSendVoice}
+                onCancel={() => setIsVoiceRecording(false)}
+              />
+            ) : (
+              <form
+                onSubmit={handleSend}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  width: '100%',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: '24px',
+                  padding: '0.2rem 0.35rem 0.2rem 0.65rem',
+                  boxSizing: 'border-box',
+                  position: 'relative',
+                }}
+              >
+                {/* Left: Image / GIF attachment button */}
+                <button
+                  type="button"
+                  onClick={() => setIsMediaModalOpen(true)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-dim)',
+                    padding: '0.35rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: '50%',
+                    transition: 'color 0.15s',
+                    flexShrink: 0,
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-dim)')}
+                  title="Share Photo or GIF"
+                  aria-label="Share Photo or GIF"
+                >
+                  <ImageIcon size={18} />
+                </button>
+
+                {/* Center: Text Input Field */}
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={inputText}
+                  onChange={handleInputChange}
+                  placeholder="Say something to the room..."
+                  className="chat-input-field"
+                  style={{
+                    flex: 1,
+                    background: 'transparent',
+                    border: 'none',
+                    outline: 'none',
+                    color: 'var(--text-main)',
+                    padding: '0.45rem 0.4rem',
+                    minWidth: 0,
+                    fontSize: '15px',
+                  }}
+                />
+
+                {/* Right: Emoji Picker Button & Popover */}
+                <div style={{ position: 'relative' }} ref={emojiPickerRef}>
+                  <button
+                    type="button"
+                    onClick={() => setIsEmojiPickerOpen((prev) => !prev)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: isEmojiPickerOpen ? 'var(--accent-purple)' : 'var(--text-dim)',
+                      padding: '0.35rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: '50%',
+                      transition: 'color 0.15s',
+                      flexShrink: 0,
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isEmojiPickerOpen) e.currentTarget.style.color = '#fff'
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isEmojiPickerOpen) e.currentTarget.style.color = 'var(--text-dim)'
+                    }}
+                    title="Insert emoji"
+                    aria-label="Insert emoji"
+                    aria-expanded={isEmojiPickerOpen}
+                  >
+                    <Smile size={18} />
+                  </button>
+
+                  {/* Emoji Popover */}
+                  {isEmojiPickerOpen && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        bottom: 'calc(100% + 0.65rem)',
+                        right: 0,
+                        zIndex: 130,
+                        background: 'rgba(18, 21, 31, 0.96)',
+                        backdropFilter: 'blur(16px)',
+                        border: '1px solid var(--border-subtle)',
+                        borderRadius: '16px',
+                        boxShadow: '0 12px 32px rgba(0, 0, 0, 0.7), 0 0 15px rgba(139, 92, 246, 0.15)',
+                        padding: '0.6rem',
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(6, 1fr)',
+                        gap: '0.35rem',
+                        width: '240px',
+                        maxHeight: '200px',
+                        overflowY: 'auto',
+                      }}
+                    >
+                      {CHAT_INPUT_EMOJIS.map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => handleInsertEmoji(emoji)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            fontSize: '1.25rem',
+                            padding: '0.3rem',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'background 0.15s, transform 0.1s',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'
+                            e.currentTarget.style.transform = 'scale(1.2)'
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'none'
+                            e.currentTarget.style.transform = 'scale(1)'
+                          }}
+                          title={emoji}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Rightmost Action: Send when typing, Mic when empty */}
+                {inputText.trim() ? (
+                  <button
+                    type="submit"
+                    style={{
+                      background: 'var(--accent-purple)',
+                      border: 'none',
+                      color: '#fff',
+                      borderRadius: '50%',
+                      width: '32px',
+                      height: '32px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                      boxShadow: '0 2px 8px rgba(139, 92, 246, 0.4)',
+                      transition: 'transform 0.15s',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.06)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                    title="Send message"
+                    aria-label="Send message"
+                  >
+                    <Send size={15} style={{ marginLeft: '1px' }} />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsVoiceRecording(true)}
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      border: 'none',
+                      color: '#fbbf24',
+                      borderRadius: '50%',
+                      width: '32px',
+                      height: '32px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                      transition: 'all 0.15s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(251, 191, 36, 0.18)'
+                      e.currentTarget.style.transform = 'scale(1.06)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'
+                      e.currentTarget.style.transform = 'scale(1)'
+                    }}
+                    title="Record 30s Voice Note (1-tap)"
+                    aria-label="Record voice note"
+                  >
+                    <Mic size={17} />
+                  </button>
+                )}
+              </form>
+            )}
+          </div>
+
+          {/* Media Attachment Modal (GIFs & Images) */}
+          <MediaAttachmentModal
+            isOpen={isMediaModalOpen}
+            onClose={() => setIsMediaModalOpen(false)}
+            onSendMedia={handleSendMedia}
+          />
+
+          {/* Lightbox / Zoom Modal */}
+          {lightboxImage && (
+            <div
               style={{
-                flex: 1,
-                padding: '0.65rem 0.85rem',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--border-subtle)',
-                background: 'var(--bg-surface)',
-                color: 'var(--text-main)',
-                fontSize: '0.85rem',
-                outline: 'none',
+                position: 'fixed',
+                inset: 0,
+                zIndex: 300,
+                background: 'rgba(0, 0, 0, 0.9)',
+                backdropFilter: 'blur(10px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '1.5rem',
               }}
-            />
-            <button
-              type="submit"
-              disabled={!inputText.trim()}
-              className="btn-action btn-primary"
-              style={{ padding: '0.65rem 0.85rem', opacity: inputText.trim() ? 1 : 0.5 }}
+              onClick={() => setLightboxImage(null)}
             >
-              <Send size={15} />
-            </button>
-          </form>
+              <button
+                onClick={() => setLightboxImage(null)}
+                style={{
+                  position: 'absolute',
+                  top: '1.5rem',
+                  right: '1.5rem',
+                  background: 'rgba(255, 255, 255, 0.15)',
+                  border: 'none',
+                  color: '#fff',
+                  borderRadius: '50%',
+                  width: '36px',
+                  height: '36px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                }}
+              >
+                <X size={20} />
+              </button>
+              <img
+                src={lightboxImage}
+                alt="Enlarged"
+                style={{
+                  maxWidth: '90vw',
+                  maxHeight: '85vh',
+                  objectFit: 'contain',
+                  borderRadius: 'var(--radius-lg, 12px)',
+                  boxShadow: '0 20px 50px rgba(0, 0, 0, 0.9)',
+                }}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+          )}
         </>
       )}
     </aside>

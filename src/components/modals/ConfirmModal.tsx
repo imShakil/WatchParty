@@ -57,6 +57,8 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
         style={{
           width: '100%',
           maxWidth: '420px',
+          maxHeight: '90dvh',
+          overflowY: 'auto',
           background: 'rgba(18, 21, 31, 0.95)',
           borderRadius: 'var(--radius-lg, 16px)',
           border: isDestructive ? '1px solid rgba(239, 68, 68, 0.35)' : '1px solid var(--border-subtle, rgba(255, 255, 255, 0.1))',

@@ -8,6 +8,7 @@ export type PeerStatusHandler = (
 ) => void
 export type PeerConnectionListHandler = (peerIds: string[]) => void
 export type GuestConnectedHandler = (guestPeerId: string) => void
+export type GuestDisconnectedHandler = (guestPeerId: string) => void
 export type RemoteStreamHandler = (stream: MediaStream) => void
 
 const ICE_SERVERS: RTCIceServer[] = [
@@ -22,6 +23,7 @@ export class PeerService {
   private guestConnections: Map<string, DataConnection> = new Map()
   private mediaCalls: Map<string, MediaConnection> = new Map()
   private activeLocalStream: MediaStream | null = null
+  private connectTimeoutTimer: ReturnType<typeof setTimeout> | null = null
 
   public myPeerId: string = ''
   public isHost: boolean = false
@@ -30,6 +32,7 @@ export class PeerService {
   private statusListeners: Set<PeerStatusHandler> = new Set()
   private peerListListeners: Set<PeerConnectionListHandler> = new Set()
   private guestConnectedListeners: Set<GuestConnectedHandler> = new Set()
+  private guestDisconnectedListeners: Set<GuestDisconnectedHandler> = new Set()
   private remoteStreamListeners: Set<RemoteStreamHandler> = new Set()
 
   /**
@@ -104,13 +107,39 @@ export class PeerService {
       })
 
       peerInstance.on('error', (err) => {
-        this.notifyStatus('error', err.message || 'Peer connection error')
+        const isUnavailable =
+          err.type === 'peer-unavailable' ||
+          (err.message && err.message.toLowerCase().includes('could not connect to peer'))
+        const errMsg = isUnavailable ? 'ROOM_EXPIRED' : (err.message || 'Peer connection error')
+        this.notifyStatus('error', errMsg)
         reject(err)
       })
 
       peerInstance.on('disconnected', () => {
         this.notifyStatus('disconnected')
       })
+    })
+  }
+
+  /**
+   * Attempt to reconnect to host during temporary disconnect or page reload
+   */
+  public async reconnectToHost(hostId: string): Promise<boolean> {
+    if (!this.peer || this.peer.destroyed || this.peer.disconnected) {
+      try {
+        await this.initGuest(hostId)
+        return true
+      } catch {
+        return false
+      }
+    }
+
+    return new Promise((resolve) => {
+      this.connectToHost(
+        hostId,
+        () => resolve(true),
+        () => resolve(false)
+      )
     })
   }
 
@@ -121,6 +150,20 @@ export class PeerService {
   ): void {
     if (!this.peer) return
 
+    if (this.connectTimeoutTimer) {
+      clearTimeout(this.connectTimeoutTimer)
+      this.connectTimeoutTimer = null
+    }
+
+    let isResolved = false
+    this.connectTimeoutTimer = setTimeout(() => {
+      if (!isResolved) {
+        isResolved = true
+        this.notifyStatus('error', 'ROOM_EXPIRED')
+        onError(new Error('ROOM_EXPIRED'))
+      }
+    }, 6000)
+
     const conn = this.peer.connect(hostId, {
       reliable: true,
     })
@@ -128,6 +171,12 @@ export class PeerService {
     this.hostConnection = conn
 
     const handleOpen = () => {
+      if (isResolved) return
+      isResolved = true
+      if (this.connectTimeoutTimer) {
+        clearTimeout(this.connectTimeoutTimer)
+        this.connectTimeoutTimer = null
+      }
       this.notifyStatus('connected')
       this.notifyPeerList([hostId])
       onSuccess()
@@ -144,12 +193,22 @@ export class PeerService {
     })
 
     conn.on('close', () => {
-      this.notifyStatus('disconnected', 'Host disconnected')
+      if (this.connectTimeoutTimer) {
+        clearTimeout(this.connectTimeoutTimer)
+        this.connectTimeoutTimer = null
+      }
+      this.notifyStatus('disconnected', 'HOST_LEFT')
       this.notifyPeerList([])
     })
 
     conn.on('error', (err) => {
-      this.notifyStatus('error', err.message || 'Connection to host failed')
+      if (isResolved) return
+      isResolved = true
+      if (this.connectTimeoutTimer) {
+        clearTimeout(this.connectTimeoutTimer)
+        this.connectTimeoutTimer = null
+      }
+      this.notifyStatus('error', 'ROOM_EXPIRED')
       onError(err)
     })
   }
@@ -203,6 +262,7 @@ export class PeerService {
       }
       this.guestConnections.delete(conn.peer)
       this.notifyPeerList(Array.from(this.guestConnections.keys()))
+      this.notifyGuestDisconnected(conn.peer)
     })
 
     conn.on('error', () => {
@@ -217,6 +277,7 @@ export class PeerService {
       }
       this.guestConnections.delete(conn.peer)
       this.notifyPeerList(Array.from(this.guestConnections.keys()))
+      this.notifyGuestDisconnected(conn.peer)
     })
   }
 
@@ -323,6 +384,19 @@ export class PeerService {
     }
   }
 
+  public onGuestDisconnected(listener: GuestDisconnectedHandler): () => void {
+    this.guestDisconnectedListeners.add(listener)
+    return () => {
+      this.guestDisconnectedListeners.delete(listener)
+    }
+  }
+
+  private notifyGuestDisconnected(guestPeerId: string): void {
+    for (const listener of this.guestDisconnectedListeners) {
+      listener(guestPeerId)
+    }
+  }
+
   public broadcastStream(stream: MediaStream): void {
     this.activeLocalStream = stream
     if (!this.peer || !this.isHost) return
@@ -380,8 +454,14 @@ export class PeerService {
   }
 
   public cleanup(): void {
+    if (this.connectTimeoutTimer) {
+      clearTimeout(this.connectTimeoutTimer)
+      this.connectTimeoutTimer = null
+    }
+
     this.stopStream()
     this.remoteStreamListeners.clear()
+    this.guestDisconnectedListeners.clear()
 
     if (this.hostConnection) {
       this.hostConnection.close()

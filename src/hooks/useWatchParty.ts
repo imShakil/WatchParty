@@ -9,6 +9,14 @@ import {
   saveRoomChat,
   getRoomChat,
 } from '@/utils/sessionUtils'
+import {
+  logPartyEvent,
+  registerPartyRoom,
+  updatePartyRoomParticipantCount,
+  updatePartyRoomHeartbeat,
+  checkPartyRoomStatus,
+  endPartyRoom,
+} from '@/services/firebaseService'
 import type { UnifiedPlayerRef } from '@/types/player.types'
 import type {
   ChatMessage,
@@ -28,6 +36,18 @@ export function useWatchParty() {
     'disconnected' | 'connecting' | 'connected' | 'error'
   >('disconnected')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [isRoomExpired, setIsRoomExpired] = useState<boolean>(false)
+  const [roomExpiredReason, setRoomExpiredReason] = useState<string>('')
+  const [isHostReconnecting, setIsHostReconnecting] = useState<boolean>(false)
+  const [hostReconnectCountdown, setHostReconnectCountdown] = useState<number>(35)
+
+  const isHostReconnectingRef = useRef<boolean>(false)
+  const hostReconnectTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const isIntentionalExit = useRef<boolean>(false)
+
+  useEffect(() => {
+    isHostReconnectingRef.current = isHostReconnecting
+  }, [isHostReconnecting])
 
   const [roomId, setRoomId] = useState<string>('')
   const [isHost, setIsHost] = useState<boolean>(false)
@@ -56,6 +76,8 @@ export function useWatchParty() {
   const [isPeerBuffering, setIsPeerBuffering] = useState<boolean>(false)
   const [bufferingPeerName, setBufferingPeerName] = useState<string>('')
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null)
+  const [typingUsers, setTypingUsers] = useState<string[]>([])
+  const typingTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
   const roomIdRef = useRef<string>(roomId)
   const messagesRef = useRef<ChatMessage[]>([])
@@ -148,6 +170,8 @@ export function useWatchParty() {
         payload: { emoji, x: newReaction.x },
       })
 
+      logPartyEvent('party_reaction', { emoji, roomId: roomIdRef.current })
+
       // Auto-remove reaction after 2.5s animation
       setTimeout(() => {
         setReactions((prev) => prev.filter((r) => r.id !== reactionId))
@@ -156,17 +180,20 @@ export function useWatchParty() {
     [userName]
   )
 
-  // Send Chat Message
+  // Send Chat Message (text, image/GIF attachment, or 30s voice note)
   const sendChatMessage = useCallback(
-    (text: string) => {
+    (text: string, imageUrl?: string, audioUrl?: string, audioDuration?: number) => {
       const trimmed = text.trim()
-      if (!trimmed) return
+      if (!trimmed && !imageUrl && !audioUrl) return
 
       const msg: ChatMessage = {
         id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         senderId: peerService.myPeerId,
         senderName: userName,
         text: trimmed,
+        imageUrl,
+        audioUrl,
+        audioDuration,
         timestamp: Date.now(),
         isHost,
       }
@@ -179,8 +206,35 @@ export function useWatchParty() {
         senderName: userName,
         payload: msg,
       })
+
+      logPartyEvent('party_chat_sent', {
+        roomId: roomIdRef.current,
+        hasAttachment: Boolean(imageUrl),
+        hasAudio: Boolean(audioUrl),
+      })
+
+      // Immediately cancel typing status when message is sent
+      peerService.send({
+        type: 'TYPING_STATUS',
+        senderId: peerService.myPeerId,
+        senderName: userName,
+        payload: { isTyping: false, senderName: userName },
+      })
     },
     [userName, isHost, appendMessage]
+  )
+
+  // Send Typing Status
+  const sendTypingStatus = useCallback(
+    (isTyping: boolean) => {
+      peerService.send({
+        type: 'TYPING_STATUS',
+        senderId: peerService.myPeerId,
+        senderName: userName,
+        payload: { isTyping, senderName: userName },
+      })
+    },
+    [userName]
   )
 
   // Send System Notice
@@ -481,14 +535,43 @@ export function useWatchParty() {
           const req = packet.payload as { peerId: string; userName: string }
           if (req && req.peerId && req.userName) {
             participantNamesRef.current[req.peerId] = req.userName
-            setParticipants((prev) =>
-              prev.map((p) => (p.id === req.peerId ? { ...p, name: req.userName } : p))
-            )
           }
 
           if (isHost) {
             addSystemNotice(`${packet.senderName} joined the party!`)
             confetti({ particleCount: 30, spread: 45 })
+
+            setParticipants((prev) => {
+              const updated = prev.some((p) => p.id === req.peerId)
+                ? prev.map((p) => (p.id === req.peerId ? { ...p, name: req.userName } : p))
+                : [
+                    ...prev,
+                    {
+                      id: req.peerId,
+                      name: req.userName,
+                      isHost: false,
+                      isSelf: false,
+                      isBuffering: false,
+                      joinedAt: Date.now(),
+                    },
+                  ]
+
+              // Propagate new participant roster to all connected guests
+              peerService.send({
+                type: 'PARTICIPANT_ROSTER',
+                senderId: peerService.myPeerId,
+                senderName: userName,
+                payload: {
+                  participants: updated.map((p) => ({
+                    id: p.id,
+                    name: p.name,
+                    isHost: p.isHost,
+                  })),
+                },
+              })
+
+              return updated
+            })
 
             peerService.send({
               type: 'JOIN_ACK',
@@ -503,6 +586,89 @@ export function useWatchParty() {
                 hostName: userName,
                 chatHistory: messagesRef.current.slice(-50),
               },
+            })
+          }
+          break
+        }
+
+        case 'PARTICIPANT_ROSTER': {
+          const rosterPayload = packet.payload as {
+            participants: Array<{ id: string; name: string; isHost: boolean }>
+          }
+          if (rosterPayload && Array.isArray(rosterPayload.participants)) {
+            setParticipants((prev) => {
+              const selfId = peerService.myPeerId
+              return rosterPayload.participants.map((p) => {
+                const existing = prev.find((x) => x.id === p.id)
+                return {
+                  id: p.id,
+                  name: p.id === selfId ? userName : p.name,
+                  isHost: p.isHost,
+                  isSelf: p.id === selfId,
+                  isBuffering: existing ? existing.isBuffering : false,
+                  joinedAt: existing ? existing.joinedAt : Date.now(),
+                }
+              })
+            })
+          }
+          break
+        }
+
+        case 'TYPING_STATUS': {
+          const { isTyping, senderName } = packet.payload as {
+            isTyping: boolean
+            senderName: string
+          }
+          const pId = packet.senderId
+          if (pId === peerService.myPeerId) break
+
+          const existingTimer = typingTimersRef.current.get(pId)
+          if (existingTimer) {
+            clearTimeout(existingTimer)
+            typingTimersRef.current.delete(pId)
+          }
+
+          if (isTyping) {
+            setTypingUsers((prev) => (prev.includes(senderName) ? prev : [...prev, senderName]))
+            const timer = setTimeout(() => {
+              setTypingUsers((prev) => prev.filter((n) => n !== senderName))
+              typingTimersRef.current.delete(pId)
+            }, 3000)
+            typingTimersRef.current.set(pId, timer)
+          } else {
+            setTypingUsers((prev) => prev.filter((n) => n !== senderName))
+          }
+          break
+        }
+
+        case 'PEER_LEFT': {
+          const { peerId, userName: leftUser } = packet.payload as {
+            peerId: string
+            userName: string
+          }
+          if (peerId === peerService.myPeerId) break
+
+          const displayName = leftUser || participantNamesRef.current[peerId] || 'A friend'
+          addSystemNotice(`${displayName} left the party.`)
+          setParticipants((prev) => prev.filter((p) => p.id !== peerId))
+          setTypingUsers((prev) => prev.filter((n) => n !== displayName))
+
+          if (isHost) {
+            setParticipants((prev) => {
+              const remaining = prev.filter((p) => p.id !== peerId)
+              peerService.send({
+                type: 'PARTICIPANT_ROSTER',
+                senderId: peerService.myPeerId,
+                senderName: userName,
+                payload: {
+                  participants: remaining.map((p) => ({
+                    id: p.id,
+                    name: p.name,
+                    isHost: p.isHost,
+                  })),
+                },
+              })
+              return remaining
             })
           }
           break
@@ -554,12 +720,15 @@ export function useWatchParty() {
 
         case 'ROOM_CLOSED': {
           addSystemNotice('The host has ended this watch party.')
+          if (hostReconnectTimerRef.current) {
+            clearInterval(hostReconnectTimerRef.current)
+            hostReconnectTimerRef.current = null
+          }
+          setIsHostReconnecting(false)
           peerService.cleanup()
           setConnectionStatus('disconnected')
-          setErrorMessage('The host has ended the watch party.')
-          setTimeout(() => {
-            window.location.href = '/'
-          }, 2500)
+          setIsRoomExpired(true)
+          setRoomExpiredReason('The host has ended this watch party.')
           break
         }
       }
@@ -599,6 +768,18 @@ export function useWatchParty() {
         setRoomMetadata(meta)
         saveHostSession(id, meta)
 
+        logPartyEvent('party_created', {
+          roomId: id,
+          title: meta.roomTitle,
+          isP2P: Boolean(meta.isP2PStream),
+        })
+        void registerPartyRoom(id, {
+          title: meta.roomTitle,
+          hostName: userName,
+          isP2P: meta.isP2PStream,
+          streamUrl: meta.streamUrl,
+        })
+
         setParticipants([
           {
             id,
@@ -628,6 +809,8 @@ export function useWatchParty() {
       try {
         setConnectionStatus('connecting')
         setErrorMessage(null)
+        setIsRoomExpired(false)
+        setRoomExpiredReason('')
         const cleanId = targetRoomId.trim()
         setRoomId(cleanId)
         setIsHost(false)
@@ -638,7 +821,25 @@ export function useWatchParty() {
         }
 
         clearHostSession()
+
+        // Verify room in Firestore first if available
+        const roomStatus = await checkPartyRoomStatus(cleanId)
+        if (roomStatus.exists && !roomStatus.isActive) {
+          setIsRoomExpired(true)
+          setRoomExpiredReason('This watch party has already ended or the host is offline.')
+          setConnectionStatus('disconnected')
+          return
+        }
+
+        if (roomStatus.title) {
+          setRoomMetadata((prev) => ({ ...prev, roomTitle: roomStatus.title || prev.roomTitle }))
+        }
+
         await peerService.initGuest(cleanId)
+
+        logPartyEvent('party_joined', {
+          roomId: cleanId,
+        })
 
         // Send join request to host
         peerService.send({
@@ -661,20 +862,96 @@ export function useWatchParty() {
 
         addSystemNotice(`Connected to room: ${cleanId}`)
       } catch (err: unknown) {
-        setConnectionStatus('error')
         const msg = err instanceof Error ? err.message : 'Could not join room'
-        setErrorMessage(msg)
+        if (msg === 'ROOM_EXPIRED' || msg.includes('ROOM_EXPIRED')) {
+          setIsRoomExpired(true)
+          setRoomExpiredReason('This watch party has expired or the host is offline.')
+          setConnectionStatus('disconnected')
+        } else {
+          setConnectionStatus('error')
+          setErrorMessage(msg)
+        }
       }
     },
     [userName, addSystemNotice]
   )
+
+  const startHostReconnectGracePeriod = useCallback(() => {
+    if (isHost || isHostReconnectingRef.current) return
+
+    setIsHostReconnecting(true)
+    setHostReconnectCountdown(35)
+
+    // Pause player while waiting so viewers do not drift
+    if (playerControllerRef.current) {
+      playerControllerRef.current.pause()
+    } else if (videoRef.current) {
+      videoRef.current.pause()
+    }
+
+    if (hostReconnectTimerRef.current) {
+      clearInterval(hostReconnectTimerRef.current)
+    }
+
+    let remaining = 35
+    hostReconnectTimerRef.current = setInterval(async () => {
+      remaining -= 1
+      setHostReconnectCountdown(remaining)
+
+      // Try reconnecting to host every ~3 seconds
+      if (remaining % 3 === 0 && roomIdRef.current) {
+        const connected = await peerService.reconnectToHost(roomIdRef.current)
+        if (connected) {
+          if (hostReconnectTimerRef.current) {
+            clearInterval(hostReconnectTimerRef.current)
+            hostReconnectTimerRef.current = null
+          }
+          setIsHostReconnecting(false)
+          addSystemNotice('Host reconnected! Sync resumed.')
+          return
+        }
+      }
+
+      if (remaining <= 0) {
+        if (hostReconnectTimerRef.current) {
+          clearInterval(hostReconnectTimerRef.current)
+          hostReconnectTimerRef.current = null
+        }
+        setIsHostReconnecting(false)
+        setIsRoomExpired(true)
+        setRoomExpiredReason('The host did not return. The watch party has ended.')
+        setConnectionStatus('disconnected')
+      }
+    }, 1000)
+  }, [isHost, addSystemNotice])
 
   // Listen to Peer events
   useEffect(() => {
     const unsubMsg = peerService.onMessage(handleIncomingPacket)
     const unsubStatus = peerService.onStatus((status, err) => {
       setConnectionStatus(status)
-      if (err) setErrorMessage(err)
+      if (status === 'connected') {
+        if (hostReconnectTimerRef.current) {
+          clearInterval(hostReconnectTimerRef.current)
+          hostReconnectTimerRef.current = null
+        }
+        setIsHostReconnecting(false)
+      }
+
+      if (err) {
+        if (err === 'ROOM_EXPIRED' || err === 'HOST_LEFT') {
+          // If we are guest and previously connected, give host a 35s grace window to reload
+          if (!isHost && roomIdRef.current && !isRoomExpired) {
+            startHostReconnectGracePeriod()
+          } else {
+            setIsRoomExpired(true)
+            setRoomExpiredReason('This watch party has expired or the host is offline.')
+            setErrorMessage(null)
+          }
+        } else {
+          setErrorMessage(err)
+        }
+      }
     })
     const unsubPeers = peerService.onPeerListChange((peerIds) => {
       setParticipants((prev) => {
@@ -722,14 +999,88 @@ export function useWatchParty() {
       addSystemNotice('Connected to live P2P video stream from host')
     })
 
+    const unsubGuestDisconnect = peerService.onGuestDisconnected((peerId) => {
+      const leftName = participantNamesRef.current[peerId] || 'A friend'
+      addSystemNotice(`${leftName} left the party.`)
+      setParticipants((prev) => {
+        const remaining = prev.filter((p) => p.id !== peerId)
+        if (isHost) {
+          peerService.send({
+            type: 'PARTICIPANT_ROSTER',
+            senderId: peerService.myPeerId,
+            senderName: userName,
+            payload: {
+              participants: remaining.map((p) => ({
+                id: p.id,
+                name: p.name,
+                isHost: p.isHost,
+              })),
+            },
+          })
+        }
+        return remaining
+      })
+      setTypingUsers((prev) => prev.filter((n) => n !== leftName))
+    })
+
     return () => {
       unsubMsg()
       unsubStatus()
       unsubPeers()
       unsubGuest()
+      unsubGuestDisconnect()
       unsubStream()
     }
-  }, [handleIncomingPacket, userName, isHost, roomMetadata, getIsPlayingState, getCurrentPlaybackTime, addSystemNotice])
+  }, [
+    handleIncomingPacket,
+    userName,
+    isHost,
+    roomMetadata,
+    getIsPlayingState,
+    getCurrentPlaybackTime,
+    addSystemNotice,
+    startHostReconnectGracePeriod,
+    isRoomExpired,
+  ])
+
+  // Broadcast PEER_LEFT on tab close or navigation, and mark room ended if host
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Guard host against accidental close when friends are watching
+      if (isHost && participants.length > 1 && !isIntentionalExit.current) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+
+      if (!isHost && peerService.myPeerId) {
+        peerService.send({
+          type: 'PEER_LEFT',
+          senderId: peerService.myPeerId,
+          senderName: userName,
+          payload: { peerId: peerService.myPeerId, userName },
+        })
+      } else if (isHost && roomIdRef.current && isIntentionalExit.current) {
+        void endPartyRoom(roomIdRef.current)
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [isHost, userName, participants.length])
+
+  // Sync real-time participant count and periodic heartbeat to Firestore when host is running room
+  useEffect(() => {
+    if (!isHost || connectionStatus !== 'connected' || !roomId) return
+
+    void updatePartyRoomParticipantCount(roomId, participants.length)
+
+    const interval = setInterval(() => {
+      void updatePartyRoomHeartbeat(roomId, participants.length)
+    }, 25000)
+
+    return () => clearInterval(interval)
+  }, [isHost, roomId, connectionStatus, participants.length])
 
   // Host heartbeat interval to keep guests in sync
   useEffect(() => {
@@ -760,12 +1111,34 @@ export function useWatchParty() {
   }, [isHost, connectionStatus, userName, getCurrentPlaybackTime, getIsPlayingState])
 
   const terminateRoom = useCallback(() => {
+    isIntentionalExit.current = true
+    if (hostReconnectTimerRef.current) {
+      clearInterval(hostReconnectTimerRef.current)
+      hostReconnectTimerRef.current = null
+    }
+    setIsHostReconnecting(false)
+
+    logPartyEvent('party_ended', {
+      roomId,
+      isHost,
+    })
+
     if (isHost) {
+      if (roomId) {
+        void endPartyRoom(roomId)
+      }
       peerService.send({
         type: 'ROOM_CLOSED',
         senderId: peerService.myPeerId,
         senderName: userName,
         payload: { reason: 'Host terminated party' },
+      })
+    } else {
+      peerService.send({
+        type: 'PEER_LEFT',
+        senderId: peerService.myPeerId,
+        senderName: userName,
+        payload: { peerId: peerService.myPeerId, userName },
       })
     }
     clearHostSession()
@@ -774,11 +1147,87 @@ export function useWatchParty() {
     setIsHost(false)
     setConnectionStatus('disconnected')
     window.location.href = '/'
-  }, [isHost, userName])
+  }, [isHost, userName, roomId])
+
+  const continueWatchingSolo = useCallback(() => {
+    if (hostReconnectTimerRef.current) {
+      clearInterval(hostReconnectTimerRef.current)
+      hostReconnectTimerRef.current = null
+    }
+    setIsHostReconnecting(false)
+    setIsRoomExpired(false)
+    setRoomExpiredReason('')
+    peerService.cleanup()
+    clearHostSession()
+    setConnectionStatus('disconnected')
+    addSystemNotice('Now watching solo. Playback is independent.')
+    if (playerControllerRef.current) {
+      playerControllerRef.current.play()
+    } else if (videoRef.current) {
+      videoRef.current.play().catch(() => {})
+    }
+  }, [addSystemNotice])
+
+  const takeOverAsHost = useCallback(() => {
+    if (hostReconnectTimerRef.current) {
+      clearInterval(hostReconnectTimerRef.current)
+      hostReconnectTimerRef.current = null
+    }
+    setIsHostReconnecting(false)
+    setIsRoomExpired(false)
+    setRoomExpiredReason('')
+    peerService.cleanup()
+
+    const curTime = getCurrentPlaybackTime()
+    const curStream = roomMetadata.streamUrl
+    const curTitle = `${roomMetadata.roomTitle} (Resumed)`
+    const newRoomId = `dpwp-${Math.random().toString(36).substring(2, 8)}`
+
+    void startHost(newRoomId, {
+      streamUrl: curStream,
+      roomTitle: curTitle,
+      posterUrl: roomMetadata.posterUrl,
+    }).then(() => {
+      setTimeout(() => {
+        if (playerControllerRef.current) {
+          playerControllerRef.current.seekTo(curTime)
+        } else if (videoRef.current) {
+          videoRef.current.currentTime = curTime
+        }
+      }, 500)
+    })
+  }, [getCurrentPlaybackTime, roomMetadata, startHost])
+
+  const markRoomExpired = useCallback((reason?: string) => {
+    setIsRoomExpired(true)
+    if (reason) {
+      setRoomExpiredReason(reason)
+    }
+    setConnectionStatus('disconnected')
+  }, [])
+
+  const dismissRoomExpired = useCallback(() => {
+    isIntentionalExit.current = true
+    if (hostReconnectTimerRef.current) {
+      clearInterval(hostReconnectTimerRef.current)
+      hostReconnectTimerRef.current = null
+    }
+    setIsHostReconnecting(false)
+    setIsRoomExpired(false)
+    setRoomExpiredReason('')
+    setConnectionStatus('disconnected')
+    clearHostSession()
+    peerService.cleanup()
+    window.location.href = '/'
+  }, [])
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      if (hostReconnectTimerRef.current) {
+        clearInterval(hostReconnectTimerRef.current)
+        hostReconnectTimerRef.current = null
+      }
       peerService.cleanup()
     }
   }, [])
@@ -786,6 +1235,14 @@ export function useWatchParty() {
   return {
     connectionStatus,
     errorMessage,
+    isRoomExpired,
+    roomExpiredReason,
+    isHostReconnecting,
+    hostReconnectCountdown,
+    markRoomExpired,
+    dismissRoomExpired,
+    continueWatchingSolo,
+    takeOverAsHost,
     roomId,
     isHost,
     userName,
@@ -794,6 +1251,7 @@ export function useWatchParty() {
     participants,
     messages,
     reactions,
+    typingUsers,
     isPeerBuffering,
     bufferingPeerName,
     remoteStream,
@@ -802,6 +1260,7 @@ export function useWatchParty() {
     playerControllerRef,
     triggerReaction,
     sendChatMessage,
+    sendTypingStatus,
     handlePlayerPlay,
     handlePlayerPause,
     handlePlayerSeek,

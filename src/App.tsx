@@ -9,14 +9,24 @@ import { StreamSelectorModal } from '@/components/modals/StreamSelectorModal'
 import { EditNameModal } from '@/components/modals/EditNameModal'
 import { WelcomeModal } from '@/components/modals/WelcomeModal'
 import { ConfirmModal } from '@/components/modals/ConfirmModal'
+import { RoomExpiredModal } from '@/components/modals/RoomExpiredModal'
 import { LandingPage } from '@/components/landing/LandingPage'
 import { parseCurrentRoute, syncRoomUrl } from '@/utils/routeUtils'
 import { getHostSession } from '@/utils/sessionUtils'
+import { checkPartyRoomStatus } from '@/services/firebaseService'
 
 export function App() {
   const {
     connectionStatus,
     errorMessage,
+    isRoomExpired,
+    roomExpiredReason,
+    isHostReconnecting,
+    hostReconnectCountdown,
+    continueWatchingSolo,
+    takeOverAsHost,
+    markRoomExpired,
+    dismissRoomExpired,
     roomId,
     isHost,
     userName,
@@ -25,6 +35,7 @@ export function App() {
     participants,
     messages,
     reactions,
+    typingUsers,
     isPeerBuffering,
     bufferingPeerName,
     remoteStream,
@@ -33,6 +44,7 @@ export function App() {
     playerControllerRef,
     triggerReaction,
     sendChatMessage,
+    sendTypingStatus,
     handlePlayerPlay,
     handlePlayerPause,
     handlePlayerSeek,
@@ -79,6 +91,18 @@ export function App() {
     }
   }, [urlRoom, connectionStatus, startHost])
 
+  // Pre-check direct room URL status in Firestore to detect expired theater early
+  useEffect(() => {
+    if (!urlRoom || getHostSession(urlRoom) || connectionStatus === 'connected') return
+
+    void checkPartyRoomStatus(urlRoom).then((status) => {
+      if (status.exists && !status.isActive) {
+        setIsWelcomeOpen(false)
+        markRoomExpired('This watch party has already ended or the host is offline.')
+      }
+    })
+  }, [urlRoom, markRoomExpired, connectionStatus])
+
   const handleHostParty = (
     streamUrl?: string,
     title?: string,
@@ -103,13 +127,14 @@ export function App() {
     setIsWelcomeOpen(false)
   }
 
-  // Determine if user is on landing page (no active room, no direct invite in URL)
+  // Determine if user is on landing page (no active room, no direct invite in URL, and room not expired)
   const isLandingView =
     !roomId &&
     connectionStatus !== 'connected' &&
     connectionStatus !== 'connecting' &&
     !urlRoom &&
-    initialRoute.type === 'landing'
+    initialRoute.type === 'landing' &&
+    !isRoomExpired
 
   if (isLandingView) {
     return (
@@ -144,7 +169,7 @@ export function App() {
       {/* Main Split View */}
       <main className={`party-main ${isTheaterMode ? 'theater-mode' : ''}`}>
         {/* Left: Video Player */}
-        <div style={{ flex: 1, position: 'relative', height: '100%' }}>
+        <div className="player-wrapper">
           <PartyPlayer
             streamUrl={roomMetadata.streamUrl}
             posterUrl={roomMetadata.posterUrl}
@@ -163,23 +188,62 @@ export function App() {
 
           {/* Floating Emoji Reactions Layer */}
           <FloatingReactions reactions={reactions} />
+
+          {/* Host Reconnecting Grace Period Banner */}
+          {isHostReconnecting && (
+            <div
+              style={{
+                position: 'absolute',
+                top: '1rem',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                zIndex: 40,
+                background: 'rgba(18, 21, 31, 0.94)',
+                backdropFilter: 'blur(10px)',
+                border: '1px solid rgba(245, 158, 11, 0.45)',
+                borderRadius: '999px',
+                padding: '0.5rem 1.15rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.65rem',
+                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.6), 0 0 15px rgba(245, 158, 11, 0.2)',
+                color: '#fbbf24',
+                fontSize: '0.85rem',
+                fontWeight: 600,
+              }}
+            >
+              <div
+                style={{
+                  width: '12px',
+                  height: '12px',
+                  borderRadius: '50%',
+                  border: '2px solid #fbbf24',
+                  borderTopColor: 'transparent',
+                  animation: 'spin 1s linear infinite',
+                }}
+              />
+              <span>Host disconnected. Reconnecting ({hostReconnectCountdown}s)...</span>
+            </div>
+          )}
         </div>
 
         {/* Right: Live Chat & Participants Sidebar */}
         <PartyChat
           messages={messages}
           participants={participants}
+          typingUsers={typingUsers}
           isHost={isHost}
           isHostOnlyControl={roomMetadata.isHostOnlyControl}
           onToggleControlMode={toggleHostOnlyControl}
           onSendMessage={sendChatMessage}
+          onSendTypingStatus={sendTypingStatus}
           onTriggerReaction={triggerReaction}
         />
       </main>
 
       {/* Welcome / Join Modal */}
       <WelcomeModal
-        isOpen={isWelcomeOpen && !(roomId && connectionStatus === 'connected')}
+        isOpen={isWelcomeOpen && !isRoomExpired && !(roomId && connectionStatus === 'connected')}
         initialRoomParam={urlRoom}
         initialStreamParam={urlStream}
         initialTitleParam={urlTitle}
@@ -187,6 +251,21 @@ export function App() {
         onSaveName={updateUserName}
         onHostParty={handleHostParty}
         onJoinParty={handleJoinParty}
+      />
+
+      {/* Theater Closed / Room Expired Modal */}
+      <RoomExpiredModal
+        isOpen={isRoomExpired}
+        roomId={roomId || urlRoom || ''}
+        roomTitle={roomMetadata.roomTitle}
+        reason={roomExpiredReason}
+        onReturnHome={dismissRoomExpired}
+        onKeepWatchingSolo={continueWatchingSolo}
+        onTakeOverHost={takeOverAsHost}
+        onHostParty={() => {
+          dismissRoomExpired()
+          window.location.href = '/?action=host'
+        }}
       />
 
       {/* Share / Invite Friends Modal */}

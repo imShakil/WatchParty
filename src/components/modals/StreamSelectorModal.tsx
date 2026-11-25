@@ -95,6 +95,8 @@ export const StreamSelectorModal: React.FC<StreamSelectorModalProps> = ({
         style={{
           width: '100%',
           maxWidth: '540px',
+          maxHeight: '90dvh',
+          overflowY: 'auto',
           background: 'var(--bg-surface)',
           borderRadius: 'var(--radius-lg)',
           border: '1px solid var(--border-subtle)',
