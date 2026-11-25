@@ -20,6 +20,7 @@ import {
   checkPartyRoomStatus,
   checkRoomIdEligibility,
   endPartyRoom,
+  getCurrentUserUid,
 } from '@/services/firebaseService'
 import type { UnifiedPlayerRef } from '@/types/player.types'
 import type {
@@ -942,7 +943,12 @@ export function useWatchParty() {
             return
           }
           const hasOwnership = Boolean(getHostSession(cleanCustomId))
-          const eligibility = await checkRoomIdEligibility(cleanCustomId, hasOwnership, hasOwnership)
+          const allowOwnedActive = hasOwnership || Boolean(initialMeta?.isPermanent)
+          const eligibility = await checkRoomIdEligibility(
+            cleanCustomId,
+            hasOwnership,
+            allowOwnedActive
+          )
           if (!eligibility.eligible) {
             setConnectionStatus('error')
             setErrorMessage(eligibility.reason || 'Room ID is already in use.')
@@ -971,7 +977,9 @@ export function useWatchParty() {
         const initCap = Math.max(2, Math.min(15, initialMeta?.maxCapacity ?? 10))
         const initLocked = Boolean(initialMeta?.isLocked)
         const initPasscode = initialMeta?.passcode || ''
-        const initPermanent = Boolean(initialMeta?.isPermanent)
+        const currentUid = getCurrentUserUid()
+        const initPermanent = Boolean(initialMeta?.isPermanent && currentUid)
+        const ownerUid = initPermanent ? initialMeta?.ownerUid || currentUid || undefined : undefined
         setMaxCapacity(initCap)
         maxCapacityRef.current = initCap
         setIsRoomLocked(initLocked)
@@ -996,6 +1004,7 @@ export function useWatchParty() {
           isLocked: initLocked,
           passcode: initPasscode,
           isPermanent: initPermanent,
+          ownerUid,
         }
         setRoomMetadata(meta)
         saveHostSession(id, meta)
@@ -1015,6 +1024,7 @@ export function useWatchParty() {
           maxCapacity: initCap,
           isLocked: initLocked,
           isPermanent: initPermanent,
+          ownerUid,
         })
 
         setParticipants([
@@ -1546,16 +1556,25 @@ export function useWatchParty() {
     )
   }, [userName, addSystemNotice])
 
-  // Toggle Permanent Room Mode
+  // Toggle Permanent Room Mode (requires Google Sign-In)
   const toggleRoomPermanent = useCallback(() => {
+    const uid = getCurrentUserUid()
+    if (!isPermanentRef.current && !uid) {
+      addSystemNotice('Sign in with Google on the home page to make a room permanent.')
+      return
+    }
     setIsPermanent((prev) => {
       const next = !prev
       isPermanentRef.current = next
       setRoomMetadata((m) => {
-        const updated: RoomMetadata = { ...m, isPermanent: next }
+        const updated: RoomMetadata = {
+          ...m,
+          isPermanent: next,
+          ownerUid: next ? uid || m.ownerUid : m.ownerUid,
+        }
         if (roomIdRef.current) {
           saveHostSession(roomIdRef.current, updated)
-          void updatePartyRoomPermanent(roomIdRef.current, next)
+          void updatePartyRoomPermanent(roomIdRef.current, next, uid || undefined)
           if (next) {
             saveRoomChat(roomIdRef.current, messagesRef.current, true)
           }

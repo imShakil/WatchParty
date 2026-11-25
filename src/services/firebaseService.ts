@@ -1,6 +1,15 @@
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app'
 import { getAnalytics, isSupported, logEvent, type Analytics } from 'firebase/analytics'
 import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged,
+  type Auth,
+  type User,
+} from 'firebase/auth'
+import {
   getFirestore,
   doc,
   getDoc,
@@ -30,6 +39,7 @@ const firebaseConfig = {
 let app: FirebaseApp | null = null
 let analyticsInstance: Analytics | null = null
 let firestoreInstance: Firestore | null = null
+let authInstance: Auth | null = null
 let isAnalyticsInitializing = false
 
 // Multi-tier room timing:
@@ -42,12 +52,13 @@ export const STALE_ROOM_THRESHOLD_MS = 300 * 1000
  * Initialize Firebase safely (singleton)
  */
 function getFirebase() {
-  if (app) return { app, firestore: firestoreInstance }
+  if (app) return { app, firestore: firestoreInstance, auth: authInstance }
 
   try {
     const existingApps = getApps()
     app = existingApps.length > 0 ? existingApps[0] : initializeApp(firebaseConfig)
     firestoreInstance = getFirestore(app)
+    authInstance = getAuth(app)
 
     // Lazy load Analytics asynchronously with browser support check
     if (!isAnalyticsInitializing && typeof window !== 'undefined') {
@@ -71,7 +82,38 @@ function getFirebase() {
     console.warn('[DekhoParty] Firebase initialization deferred:', err)
   }
 
-  return { app, firestore: firestoreInstance }
+  return { app, firestore: firestoreInstance, auth: authInstance }
+}
+
+/**
+ * Auth helpers (Google Sign-In for Permanent Room ID ownership)
+ */
+export function getCurrentUserUid(): string | null {
+  const { auth } = getFirebase()
+  return auth?.currentUser?.uid || null
+}
+
+export function subscribeToAuth(callback: (user: User | null) => void): () => void {
+  const { auth } = getFirebase()
+  if (!auth) {
+    callback(null)
+    return () => {}
+  }
+  return onAuthStateChanged(auth, callback)
+}
+
+export async function signInWithGoogle(): Promise<User | null> {
+  const { auth } = getFirebase()
+  if (!auth) return null
+  const provider = new GoogleAuthProvider()
+  const result = await signInWithPopup(auth, provider)
+  return result.user
+}
+
+export async function signOutUser(): Promise<void> {
+  const { auth } = getFirebase()
+  if (!auth) return
+  await signOut(auth)
 }
 
 /**
@@ -161,22 +203,26 @@ export async function checkRoomIdEligibility(
     const isStale = now - lastActive > STALE_ROOM_THRESHOLD_MS
     const isActive = data.status === 'active' && !isStale
     const isPermanent = Boolean(data.isPermanent)
+    const currentUid = getCurrentUserUid()
+    const isOwner = data.ownerUid
+      ? Boolean(currentUid && data.ownerUid === currentUid)
+      : hasLocalHostOwnership
 
-    if (isActive && !(allowOwnedActive && hasLocalHostOwnership)) {
+    if (isActive && !(allowOwnedActive && isOwner)) {
       return {
         eligible: false,
         reason: 'Room ID is currently in use by an active party.',
       }
     }
 
-    if (isPermanent && !hasLocalHostOwnership) {
+    if (isPermanent && !isOwner) {
       return {
         eligible: false,
         reason: 'This permanent Room ID is reserved by another host.',
       }
     }
 
-    if (isPermanent && hasLocalHostOwnership) {
+    if (isPermanent && isOwner) {
       return { eligible: true, isOwnedPermanent: true }
     }
 
@@ -200,6 +246,7 @@ export async function registerPartyRoom(
     maxCapacity?: number
     isLocked?: boolean
     isPermanent?: boolean
+    ownerUid?: string
   }
 ): Promise<void> {
   const { firestore } = getFirebase()
@@ -207,6 +254,7 @@ export async function registerPartyRoom(
 
   try {
     const roomRef = doc(firestore, 'party_rooms', roomId)
+    const resolvedOwnerUid = data.ownerUid || getCurrentUserUid() || undefined
     await setDoc(
       roomRef,
       {
@@ -219,6 +267,7 @@ export async function registerPartyRoom(
         maxCapacity: data.maxCapacity || 10,
         isLocked: Boolean(data.isLocked),
         isPermanent: Boolean(data.isPermanent),
+        ...(resolvedOwnerUid ? { ownerUid: resolvedOwnerUid } : {}),
         participantCount: 1,
         status: 'active',
         createdAt: serverTimestamp(),
@@ -236,15 +285,77 @@ export async function registerPartyRoom(
  */
 export async function updatePartyRoomPermanent(
   roomId: string,
-  isPermanent: boolean
+  isPermanent: boolean,
+  ownerUid?: string
 ): Promise<void> {
   const { firestore } = getFirebase()
   if (!firestore || !roomId) return
 
   try {
     const roomRef = doc(firestore, 'party_rooms', roomId)
+    const uid = ownerUid || getCurrentUserUid()
     await updateDoc(roomRef, {
       isPermanent,
+      ...(isPermanent && uid ? { ownerUid: uid } : {}),
+      lastActiveAt: serverTimestamp(),
+    })
+  } catch {
+    // Non-fatal
+  }
+}
+
+export interface PermanentRoomSummary {
+  roomId: string
+  title: string
+  streamUrl?: string
+  posterUrl?: string
+  status: string
+}
+
+/**
+ * Fetch all permanent rooms owned by the signed-in Google user.
+ */
+export async function getUserPermanentRooms(uid: string): Promise<PermanentRoomSummary[]> {
+  const { firestore } = getFirebase()
+  if (!firestore || !uid) return []
+
+  try {
+    const roomsCol = collection(firestore, 'party_rooms')
+    // Single-field query avoids requiring a composite Firestore index
+    const q = query(roomsCol, where('ownerUid', '==', uid))
+    const snap = await getDocs(q)
+    const rooms: PermanentRoomSummary[] = []
+    snap.forEach((d) => {
+      const data = d.data()
+      if (!data.isPermanent) return
+      rooms.push({
+        roomId: d.id,
+        title: (data.title as string) || d.id,
+        streamUrl: (data.streamUrl as string) || undefined,
+        posterUrl: (data.posterUrl as string) || undefined,
+        status: (data.status as string) || 'standby',
+      })
+    })
+    return rooms
+  } catch (err) {
+    console.warn('[DekhoParty] Failed to fetch user permanent rooms:', err)
+    return []
+  }
+}
+
+/**
+ * Remove a permanent room from the user's saved list and free up its Room ID.
+ */
+export async function removePermanentRoom(roomId: string): Promise<void> {
+  const { firestore } = getFirebase()
+  if (!firestore || !roomId) return
+
+  try {
+    const roomRef = doc(firestore, 'party_rooms', roomId)
+    await updateDoc(roomRef, {
+      isPermanent: false,
+      status: 'ended',
+      ownerUid: null,
       lastActiveAt: serverTimestamp(),
     })
   } catch {
@@ -305,6 +416,7 @@ export async function checkPartyRoomStatus(roomId: string): Promise<{
   exists: boolean
   isActive: boolean
   isPermanent?: boolean
+  ownerUid?: string
   status?: 'active' | 'standby' | 'ended'
   title?: string
   streamUrl?: string
@@ -343,6 +455,7 @@ export async function checkPartyRoomStatus(roomId: string): Promise<{
       exists: true,
       isActive,
       isPermanent,
+      ownerUid: (data.ownerUid as string) || undefined,
       status,
       title: (data.title as string) || undefined,
       streamUrl: (data.streamUrl as string) || undefined,

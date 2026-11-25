@@ -15,14 +15,28 @@ import {
   Users,
   Lock,
   Radio,
+  LogOut,
+  Pin,
+  Trash2,
 } from 'lucide-react'
-import { subscribeToActivePartyStats, type LivePartyStats } from '@/services/firebaseService'
+import type { User as FirebaseUser } from 'firebase/auth'
+import {
+  subscribeToActivePartyStats,
+  getUserPermanentRooms,
+  removePermanentRoom,
+  type LivePartyStats,
+  type PermanentRoomSummary,
+} from '@/services/firebaseService'
+import { clearHostSession } from '@/utils/sessionUtils'
 import { useRoomIdEligibility } from '@/hooks/useRoomIdEligibility'
 import { sanitizeRoomIdInput } from '@/utils/roomValidation'
 import { PartyNativeBanner, PartyLandingPopunder } from '@/components/ads/PartyAds'
 
 interface LandingPageProps {
   userName: string
+  user?: FirebaseUser | null
+  onSignIn?: () => Promise<FirebaseUser | null>
+  onSignOut?: () => Promise<void>
   onSaveName: (name: string) => void
   onHostParty: (
     streamUrl?: string,
@@ -118,6 +132,9 @@ const FEATURED_TITLES: FeaturedTitle[] = [
 
 export const LandingPage: React.FC<LandingPageProps> = ({
   userName,
+  user,
+  onSignIn,
+  onSignOut,
   onSaveName,
   onHostParty,
   onJoinParty,
@@ -129,6 +146,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const [isPermanent, setIsPermanent] = useState<boolean>(false)
   const [showAdvancedSlug, setShowAdvancedSlug] = useState<boolean>(false)
   const [liveStats, setLiveStats] = useState<LivePartyStats>({ activeRooms: 0, activeViewers: 0 })
+  const [myPermanentRooms, setMyPermanentRooms] = useState<PermanentRoomSummary[]>([])
   const slugEligibility = useRoomIdEligibility(customSlug)
 
   useEffect(() => {
@@ -137,6 +155,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     })
     return () => unsub()
   }, [])
+
+  useEffect(() => {
+    if (!user?.uid) return
+    let cancelled = false
+    void getUserPermanentRooms(user.uid).then((rooms) => {
+      if (!cancelled) setMyPermanentRooms(rooms)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [user?.uid])
 
   const handleHost = (e: React.FormEvent) => {
     e.preventDefault()
@@ -148,7 +177,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       partyName.trim() || 'My Watch Party',
       sanitizedSlug || undefined,
       undefined,
-      isPermanent
+      Boolean(user && isPermanent)
     )
   }
 
@@ -220,7 +249,70 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+          {user ? (
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                padding: '0.3rem 0.65rem',
+                borderRadius: '999px',
+                background: 'rgba(255, 255, 255, 0.06)',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
+                fontSize: '0.78rem',
+              }}
+            >
+              {user.photoURL && (
+                <img
+                  src={user.photoURL}
+                  alt={user.displayName || 'User'}
+                  style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover' }}
+                />
+              )}
+              <span className="hide-on-xs" style={{ color: '#e2e8f0', fontWeight: 600 }}>
+                {user.displayName?.split(' ')[0] || 'Signed In'}
+              </span>
+              {onSignOut && (
+                <button
+                  type="button"
+                  onClick={() => void onSignOut()}
+                  title="Sign out"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-dim)',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    padding: '0.1rem',
+                  }}
+                >
+                  <LogOut size={13} />
+                </button>
+              )}
+            </div>
+          ) : (
+            onSignIn && (
+              <button
+                type="button"
+                onClick={() => void onSignIn()}
+                className="btn-action"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  fontSize: '0.8rem',
+                  background: 'rgba(255, 255, 255, 0.06)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  color: '#fff',
+                }}
+              >
+                <span>Sign in with Google</span>
+              </button>
+            )
+          )}
+
           <a
             href="https://dekhoprime.live"
             target="_blank"
@@ -384,45 +476,78 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             Stream movies, series, YouTube videos, and local files with friends. When you play, pause, or rewind, everyone stays in lockstep. Zero lag, no accounts needed.
           </p>
 
-          {/* Quick Nickname Pill */}
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              padding: '0.5rem 1.15rem',
-              background: 'rgba(15, 17, 23, 0.88)',
-              backdropFilter: 'blur(16px)',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
-              borderRadius: 'var(--radius-full)',
-              marginBottom: '2.5rem',
-              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
-            }}
-          >
-            <User size={15} color="#ea383e" />
-            <span style={{ fontSize: '0.825rem', color: 'var(--text-dim)', fontWeight: 500 }}>
-              Your Name:
-            </span>
-            <input
-              type="text"
-              value={name}
-              maxLength={25}
-              onChange={(e) => {
-                setName(e.target.value)
-                onSaveName(e.target.value)
-              }}
-              placeholder="Viewer Name"
+          {/* Quick Nickname Pill (or Signed-in Profile Badge) */}
+          {user ? (
+            <div
               style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--text-main)',
-                fontSize: '0.85rem',
-                fontWeight: 600,
-                outline: 'none',
-                width: '135px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.55rem',
+                padding: '0.45rem 1.05rem',
+                background: 'rgba(15, 17, 23, 0.88)',
+                backdropFilter: 'blur(16px)',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                borderRadius: 'var(--radius-full)',
+                marginBottom: '2.25rem',
+                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
               }}
-            />
-          </div>
+            >
+              {user.photoURL ? (
+                <img
+                  src={user.photoURL}
+                  alt={user.displayName || 'User'}
+                  style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover' }}
+                />
+              ) : (
+                <User size={15} color="#ea383e" />
+              )}
+              <span style={{ fontSize: '0.825rem', color: 'var(--text-dim)', fontWeight: 500 }}>
+                Hosting as
+              </span>
+              <span style={{ fontSize: '0.88rem', color: '#fff', fontWeight: 700 }}>
+                {user.displayName || name}
+              </span>
+            </div>
+          ) : (
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                padding: '0.5rem 1.15rem',
+                background: 'rgba(15, 17, 23, 0.88)',
+                backdropFilter: 'blur(16px)',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                borderRadius: 'var(--radius-full)',
+                marginBottom: '2.5rem',
+                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
+              }}
+            >
+              <User size={15} color="#ea383e" />
+              <span style={{ fontSize: '0.825rem', color: 'var(--text-dim)', fontWeight: 500 }}>
+                Your Name:
+              </span>
+              <input
+                type="text"
+                value={name}
+                maxLength={25}
+                onChange={(e) => {
+                  setName(e.target.value)
+                  onSaveName(e.target.value)
+                }}
+                placeholder="Viewer Name"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-main)',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  outline: 'none',
+                  width: '135px',
+                }}
+              />
+            </div>
+          )}
 
           {/* Action Cards: Host or Join */}
           <div
@@ -545,26 +670,57 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                           {slugEligibility.message}
                         </div>
                       )}
-                      <label
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.5rem',
-                          marginTop: '0.55rem',
-                          cursor: 'pointer',
-                          fontSize: '0.78rem',
-                          color: isPermanent ? '#fbbf24' : 'var(--text-muted)',
-                          fontWeight: 500,
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isPermanent}
-                          onChange={(e) => setIsPermanent(e.target.checked)}
-                          style={{ accentColor: '#ea383e', cursor: 'pointer' }}
-                        />
-                        <span>Keep this room permanent (persistent link)</span>
-                      </label>
+
+                      {user ? (
+                        <label
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            marginTop: '0.55rem',
+                            cursor: 'pointer',
+                            fontSize: '0.78rem',
+                            color: isPermanent ? '#fbbf24' : 'var(--text-muted)',
+                            fontWeight: 500,
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isPermanent}
+                            onChange={(e) => setIsPermanent(e.target.checked)}
+                            style={{ accentColor: '#ea383e', cursor: 'pointer' }}
+                          />
+                          <span>Keep this room permanent</span>
+                        </label>
+                      ) : (
+                        onSignIn && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void onSignIn().then((u) => {
+                                if (u) setIsPermanent(true)
+                              })
+                            }}
+                            style={{
+                              marginTop: '0.55rem',
+                              background: 'rgba(251, 191, 36, 0.08)',
+                              border: '1px solid rgba(251, 191, 36, 0.28)',
+                              borderRadius: '6px',
+                              padding: '0.4rem 0.65rem',
+                              color: '#fbbf24',
+                              fontSize: '0.74rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.35rem',
+                            }}
+                          >
+                            <Pin size={12} />
+                            <span>Sign in with Google for Permanent Room ID</span>
+                          </button>
+                        )
+                      )}
                     </div>
                   ) : (
                     <button
@@ -699,6 +855,111 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </button>
             </form>
           </div>
+
+          {/* Signed-in User's Permanent Rooms (Right in Hero for 1-click Launch & Delete) */}
+          {user && myPermanentRooms.length > 0 && (
+            <div
+              style={{
+                marginTop: '1.5rem',
+                padding: '1rem 1.15rem',
+                borderRadius: 'var(--radius-lg)',
+                background: 'rgba(15, 17, 25, 0.88)',
+                backdropFilter: 'blur(16px)',
+                border: '1px solid rgba(251, 191, 36, 0.25)',
+                textAlign: 'left',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '0.75rem',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                  <Pin size={14} color="#fbbf24" />
+                  <span style={{ fontSize: '0.88rem', fontWeight: 700, color: '#fff' }}>
+                    Your Permanent Rooms ({myPermanentRooms.length})
+                  </span>
+                </div>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>
+                  Click any room to start hosting
+                </span>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
+                {myPermanentRooms.map((rm) => (
+                  <div
+                    key={rm.roomId}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      borderRadius: '10px',
+                      background: 'rgba(251, 191, 36, 0.08)',
+                      border: '1px solid rgba(251, 191, 36, 0.3)',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onHostParty(rm.streamUrl, rm.title, rm.roomId, rm.posterUrl, true)
+                      }
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.45rem',
+                        padding: '0.5rem 0.75rem',
+                        background: 'none',
+                        border: 'none',
+                        color: '#fff',
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <Play size={12} fill="#fbbf24" color="#fbbf24" />
+                      <span>{rm.title}</span>
+                      <span
+                        style={{
+                          color: '#94a3b8',
+                          fontFamily: 'monospace',
+                          fontSize: '0.72rem',
+                        }}
+                      >
+                        /{rm.roomId}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void removePermanentRoom(rm.roomId)
+                        clearHostSession(rm.roomId, false)
+                        setMyPermanentRooms((prev) =>
+                          prev.filter((item) => item.roomId !== rm.roomId)
+                        )
+                      }}
+                      title={`Delete permanent room /${rm.roomId}`}
+                      aria-label={`Delete permanent room ${rm.roomId}`}
+                      style={{
+                        background: 'rgba(239, 68, 68, 0.12)',
+                        border: 'none',
+                        borderLeft: '1px solid rgba(251, 191, 36, 0.2)',
+                        color: '#f87171',
+                        padding: '0.5rem 0.55rem',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </section>
 

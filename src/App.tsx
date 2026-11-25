@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useWatchParty } from '@/hooks/useWatchParty'
+import { usePartyAuth } from '@/hooks/usePartyAuth'
 import { PartyHeader } from '@/components/header/PartyHeader'
 import { PartyPlayer } from '@/components/player/PartyPlayer'
 import { PartyChat } from '@/components/chat/PartyChat'
@@ -17,6 +18,9 @@ import { checkPartyRoomStatus, consumeLaunchToken } from '@/services/firebaseSer
 import { PartySocialBar, PartyPlayerCornerAd } from '@/components/ads/PartyAds'
 
 export function App() {
+  const { user, signIn, logOut } = usePartyAuth()
+  const [standbyOwnerUid, setStandbyOwnerUid] = useState<string | undefined>(undefined)
+
   const {
     connectionStatus,
     errorMessage,
@@ -111,6 +115,13 @@ export function App() {
   })
   const [isTheaterMode, setIsTheaterMode] = useState<boolean>(false)
 
+  // Auto-fill nickname from Google profile when signed in (if still default Viewer XXX)
+  useEffect(() => {
+    if (user?.displayName && userName.startsWith('Viewer ')) {
+      updateUserName(user.displayName)
+    }
+  }, [user?.displayName, userName, updateUserName])
+
   // Sync route when connected to a room
   useEffect(() => {
     if (roomId && connectionStatus === 'connected') {
@@ -135,6 +146,7 @@ export function App() {
       if (status.exists && !status.isActive) {
         setIsWelcomeOpen(false)
         if (status.isPermanent) {
+          setStandbyOwnerUid(status.ownerUid)
           markRoomExpired(
             'This permanent watch room is currently on standby. The host is away.',
             true
@@ -206,10 +218,32 @@ export function App() {
         <PartySocialBar />
         <LandingPage
           userName={userName}
+          user={user}
+          onSignIn={signIn}
+          onSignOut={logOut}
           onSaveName={updateUserName}
           onHostParty={handleHostParty}
           onJoinParty={handleJoinParty}
         />
+        {errorMessage && (
+          <div
+            style={{
+              position: 'fixed',
+              bottom: '1rem',
+              left: '1rem',
+              zIndex: 110,
+              padding: '0.75rem 1rem',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--danger, #ef4444)',
+              color: '#fff',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              boxShadow: '0 4px 12px rgba(239, 68, 68, 0.4)',
+            }}
+          >
+            {errorMessage}
+          </div>
+        )}
       </>
     )
   }
@@ -321,6 +355,8 @@ export function App() {
           onUpdateRoomPasscode={updateRoomPasscode}
           isPermanent={isPermanent}
           onTogglePermanent={toggleRoomPermanent}
+          isSignedIn={Boolean(user)}
+          onSignInForPermanent={() => void signIn()}
           maxCapacity={maxCapacity}
           onUpdateMaxCapacity={updateMaxCapacity}
           onSendMessage={sendChatMessage}
@@ -337,6 +373,8 @@ export function App() {
         initialStreamParam={urlStream}
         initialTitleParam={urlTitle}
         userName={userName}
+        user={user}
+        onSignIn={signIn}
         onSaveName={updateUserName}
         onHostParty={handleHostParty}
         onJoinParty={handleJoinParty}
@@ -349,6 +387,10 @@ export function App() {
         roomTitle={roomMetadata.roomTitle}
         reason={roomExpiredReason}
         isStandby={isRoomStandby}
+        isStandbyOwner={Boolean(
+          (user?.uid && standbyOwnerUid && user.uid === standbyOwnerUid) ||
+            (!standbyOwnerUid && getHostSession(roomId || urlRoom || ''))
+        )}
         onReturnHome={dismissRoomExpired}
         onKeepWatchingSolo={continueWatchingSolo}
         onTakeOverHost={takeOverAsHost}
@@ -359,9 +401,11 @@ export function App() {
             roomTitle: roomMetadata.roomTitle,
             posterUrl: roomMetadata.posterUrl,
             isPermanent: true,
+            ownerUid: user?.uid || standbyOwnerUid,
           })
         }
         onWaitForHost={() => joinRoom(roomId || urlRoom || '')}
+        onSignInToClaim={() => void signIn()}
         onHostParty={() => {
           dismissRoomExpired()
           window.location.href = '/?action=host'

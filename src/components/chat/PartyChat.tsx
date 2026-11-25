@@ -35,6 +35,8 @@ interface PartyChatProps {
   onUpdateRoomPasscode?: (code: string) => void
   isPermanent?: boolean
   onTogglePermanent?: () => void
+  isSignedIn?: boolean
+  onSignInForPermanent?: () => void
   maxCapacity?: number
   onUpdateMaxCapacity?: (cap: number) => void
   onSendMessage: (text: string, imageUrl?: string, audioUrl?: string, audioDuration?: number) => void
@@ -63,6 +65,8 @@ export const PartyChat: React.FC<PartyChatProps> = ({
   onUpdateRoomPasscode,
   isPermanent = false,
   onTogglePermanent,
+  isSignedIn = false,
+  onSignInForPermanent,
   maxCapacity = 10,
   onUpdateMaxCapacity,
   onSendMessage,
@@ -466,7 +470,7 @@ export const PartyChat: React.FC<PartyChatProps> = ({
                 )}
               </div>
 
-              {/* Permanent Room Toggle */}
+              {/* Permanent Room Toggle (Requires Google Sign-In) */}
               <div
                 style={{
                   padding: '0.75rem 0.85rem',
@@ -499,25 +503,48 @@ export const PartyChat: React.FC<PartyChatProps> = ({
                       Permanent Room {isPermanent ? '(Active)' : ''}
                     </div>
                     <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '2px' }}>
-                      {isPermanent ? 'Link & settings saved indefinitely' : 'Auto-closes when host leaves'}
+                      {isPermanent
+                        ? 'Saved to your Google account'
+                        : isSignedIn
+                        ? 'Save link permanently to your account'
+                        : 'Google Sign-In required'}
                     </div>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={onTogglePermanent}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: isPermanent ? '#fbbf24' : 'var(--text-dim)',
-                    padding: '0.2rem',
-                  }}
-                  title={isPermanent ? 'Switch to Temporary Room' : 'Make Room Permanent'}
-                  aria-label={isPermanent ? 'Switch to Temporary Room' : 'Make Room Permanent'}
-                >
-                  {isPermanent ? <ToggleRight size={26} /> : <ToggleLeft size={26} />}
-                </button>
+                {isSignedIn ? (
+                  <button
+                    type="button"
+                    onClick={onTogglePermanent}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: isPermanent ? '#fbbf24' : 'var(--text-dim)',
+                      padding: '0.2rem',
+                    }}
+                    title={isPermanent ? 'Switch to Temporary Room' : 'Make Room Permanent'}
+                    aria-label={isPermanent ? 'Switch to Temporary Room' : 'Make Room Permanent'}
+                  >
+                    {isPermanent ? <ToggleRight size={26} /> : <ToggleLeft size={26} />}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onSignInForPermanent}
+                    style={{
+                      background: 'rgba(251, 191, 36, 0.14)',
+                      border: '1px solid rgba(251, 191, 36, 0.35)',
+                      color: '#fbbf24',
+                      borderRadius: '6px',
+                      padding: '0.3rem 0.6rem',
+                      fontSize: '0.72rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Sign In
+                  </button>
+                )}
               </div>
 
               {/* Room Capacity Stepper (Default 10, Max 15) */}

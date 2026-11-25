@@ -21,6 +21,7 @@ interface RoomExpiredModalProps {
   roomTitle?: string
   reason?: string
   isStandby?: boolean
+  isStandbyOwner?: boolean
   onReturnHome: () => void
   onHostParty?: () => void
   onKeepWatchingSolo?: () => void
@@ -28,6 +29,7 @@ interface RoomExpiredModalProps {
   onJoinWithPasscode?: (passcode: string) => void
   onWakeUpHost?: () => void
   onWaitForHost?: () => void
+  onSignInToClaim?: () => void
 }
 
 export const RoomExpiredModal: React.FC<RoomExpiredModalProps> = ({
@@ -36,6 +38,7 @@ export const RoomExpiredModal: React.FC<RoomExpiredModalProps> = ({
   roomTitle,
   reason,
   isStandby = false,
+  isStandbyOwner = false,
   onReturnHome,
   onHostParty,
   onKeepWatchingSolo,
@@ -43,6 +46,7 @@ export const RoomExpiredModal: React.FC<RoomExpiredModalProps> = ({
   onJoinWithPasscode,
   onWakeUpHost,
   onWaitForHost,
+  onSignInToClaim,
 }) => {
   const isRoomFull = Boolean(reason && reason.toLowerCase().includes('full'))
   const isRoomLocked = Boolean(reason && reason.toLowerCase().includes('locked'))
@@ -452,7 +456,7 @@ export const RoomExpiredModal: React.FC<RoomExpiredModalProps> = ({
           }}
         >
           {/* Standby Mode Buttons */}
-          {isStandby && onWakeUpHost && (
+          {isStandby && isStandbyOwner && onWakeUpHost && (
             <button
               type="button"
               onClick={onWakeUpHost}
@@ -474,7 +478,32 @@ export const RoomExpiredModal: React.FC<RoomExpiredModalProps> = ({
               }}
             >
               <Crown size={18} />
-              Wake Up & Host for Group
+              Launch Room as Host
+            </button>
+          )}
+
+          {isStandby && !isStandbyOwner && onSignInToClaim && (
+            <button
+              type="button"
+              onClick={onSignInToClaim}
+              style={{
+                width: '100%',
+                padding: '0.75rem 1rem',
+                fontSize: '0.85rem',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem',
+                background: 'rgba(251, 191, 36, 0.12)',
+                border: '1px solid rgba(251, 191, 36, 0.4)',
+                borderRadius: 'var(--radius-md, 8px)',
+                color: '#fbbf24',
+                cursor: 'pointer',
+              }}
+            >
+              <Crown size={16} />
+              Host? Sign in with Google to Launch
             </button>
           )}
 

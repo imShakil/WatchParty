@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { Play, LogIn, User, Hash } from 'lucide-react'
+import { Play, LogIn, User, Hash, Pin } from 'lucide-react'
+import type { User as FirebaseUser } from 'firebase/auth'
 import { useRoomIdEligibility } from '@/hooks/useRoomIdEligibility'
 import { sanitizeRoomIdInput } from '@/utils/roomValidation'
 
@@ -9,6 +10,8 @@ interface WelcomeModalProps {
   initialStreamParam: string | null
   initialTitleParam: string | null
   userName: string
+  user?: FirebaseUser | null
+  onSignIn?: () => Promise<FirebaseUser | null>
   onSaveName: (name: string) => void
   onHostParty: (
     streamUrl?: string,
@@ -26,6 +29,8 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({
   initialStreamParam,
   initialTitleParam,
   userName,
+  user,
+  onSignIn,
   onSaveName,
   onHostParty,
   onJoinParty,
@@ -47,7 +52,13 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({
     if (slugEligibility.status === 'invalid' || slugEligibility.status === 'checking') return
     onSaveName(name.trim() || userName)
     const sanitizedSlug = sanitizeRoomIdInput(customRoomId.trim())
-    onHostParty(streamUrl, streamTitle, sanitizedSlug || undefined, undefined, isPermanent)
+    onHostParty(
+      streamUrl,
+      streamTitle,
+      sanitizedSlug || undefined,
+      undefined,
+      Boolean(user && isPermanent)
+    )
   }
 
   const handleJoinExisting = () => {
@@ -113,28 +124,56 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({
           </p>
         </div>
 
-        {/* Username Selection */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-          <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <User size={14} color="var(--accent-purple)" /> Your Nickname
-          </label>
-          <input
-            type="text"
-            value={name}
-            maxLength={25}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Enter your name"
+        {/* Username Selection (auto-filled when signed in with Google) */}
+        {user ? (
+          <div
             style={{
-              padding: '0.75rem 0.85rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.55rem',
+              padding: '0.6rem 0.9rem',
               borderRadius: 'var(--radius-md)',
               background: 'var(--bg-secondary)',
               border: '1px solid var(--border-subtle)',
-              color: 'var(--text-main)',
-              fontSize: '0.9rem',
-              outline: 'none',
+              fontSize: '0.86rem',
             }}
-          />
-        </div>
+          >
+            {user.photoURL ? (
+              <img
+                src={user.photoURL}
+                alt={user.displayName || 'User'}
+                style={{ width: '22px', height: '22px', borderRadius: '50%', objectFit: 'cover' }}
+              />
+            ) : (
+              <User size={15} color="var(--accent-purple)" />
+            )}
+            <span style={{ color: 'var(--text-muted)' }}>Joining as</span>
+            <strong style={{ color: '#fff' }}>{user.displayName || name}</strong>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <User size={14} color="var(--accent-purple)" /> Your Nickname
+            </label>
+            <input
+              type="text"
+              value={name}
+              maxLength={25}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Enter your name"
+              style={{
+                padding: '0.75rem 0.85rem',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--bg-secondary)',
+                border: '1px solid var(--border-subtle)',
+                color: 'var(--text-main)',
+                fontSize: '0.9rem',
+                outline: 'none',
+              }}
+            />
+          </div>
+        )}
 
         {/* If Invite Room Param is present in URL */}
         {initialRoomParam ? (
@@ -255,26 +294,56 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({
                         {slugEligibility.message}
                       </div>
                     )}
-                    <label
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.45rem',
-                        marginTop: '0.5rem',
-                        cursor: 'pointer',
-                        fontSize: '0.725rem',
-                        color: isPermanent ? '#fbbf24' : 'var(--text-dim)',
-                        fontWeight: 500,
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isPermanent}
-                        onChange={(e) => setIsPermanent(e.target.checked)}
-                        style={{ accentColor: 'var(--accent-purple)', cursor: 'pointer' }}
-                      />
-                      <span>Keep room permanent</span>
-                    </label>
+                    {user ? (
+                      <label
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.45rem',
+                          marginTop: '0.5rem',
+                          cursor: 'pointer',
+                          fontSize: '0.725rem',
+                          color: isPermanent ? '#fbbf24' : 'var(--text-dim)',
+                          fontWeight: 500,
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isPermanent}
+                          onChange={(e) => setIsPermanent(e.target.checked)}
+                          style={{ accentColor: 'var(--accent-purple)', cursor: 'pointer' }}
+                        />
+                        <span>Keep room permanent</span>
+                      </label>
+                    ) : (
+                      onSignIn && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void onSignIn().then((u) => {
+                              if (u) setIsPermanent(true)
+                            })
+                          }}
+                          style={{
+                            marginTop: '0.45rem',
+                            background: 'rgba(251, 191, 36, 0.08)',
+                            border: '1px solid rgba(251, 191, 36, 0.25)',
+                            borderRadius: '6px',
+                            padding: '0.35rem 0.55rem',
+                            color: '#fbbf24',
+                            fontSize: '0.7rem',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.3rem',
+                          }}
+                        >
+                          <Pin size={11} />
+                          <span>Sign in with Google for Permanent Room</span>
+                        </button>
+                      )
+                    )}
                   </div>
                 ) : (
                   <button

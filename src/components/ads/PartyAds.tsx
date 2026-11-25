@@ -10,9 +10,14 @@ const BANNER_SRC = `https://bancadeltempoidea.org/22/${BANNER_KEY}`
 
 export const SMARTLINK_URL = 'https://directyp.org/4/aeb051115f4be77122a44707db1760a1'
 
-const CORNER_AD_DURATION_SEC = 15
+const CORNER_AD_MIN_SEC = 30
+const CORNER_AD_MAX_SEC = 60
 const CORNER_AD_INITIAL_DELAY_MS = 8000
 const CORNER_AD_REPEAT_MS = 12 * 60 * 1000
+
+function getRandomCornerAdDuration(): number {
+  return Math.floor(Math.random() * (CORNER_AD_MAX_SEC - CORNER_AD_MIN_SEC + 1)) + CORNER_AD_MIN_SEC
+}
 
 function buildBannerSrcDoc(): string {
   return `<!DOCTYPE html>
@@ -137,14 +142,14 @@ export const PartyNativeBanner: React.FC = () => {
  */
 export const PartyPlayerCornerAd: React.FC<{ isActive: boolean }> = ({ isActive }) => {
   const [visible, setVisible] = useState<boolean>(false)
-  const [secondsLeft, setSecondsLeft] = useState<number>(CORNER_AD_DURATION_SEC)
+  const [secondsLeft, setSecondsLeft] = useState<number>(() => getRandomCornerAdDuration())
   const [cycle, setCycle] = useState<number>(0)
 
   useEffect(() => {
     if (!isActive) return
 
     const showCycle = () => {
-      setSecondsLeft(CORNER_AD_DURATION_SEC)
+      setSecondsLeft(getRandomCornerAdDuration())
       setCycle((c) => c + 1)
       setVisible(true)
     }

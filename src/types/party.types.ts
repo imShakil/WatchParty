@@ -81,6 +81,7 @@ export interface RoomMetadata {
   isLocked?: boolean
   passcode?: string
   isPermanent?: boolean
+  ownerUid?: string
 }
 
 export interface PartyPacket<T = unknown> {
