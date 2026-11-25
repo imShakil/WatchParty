@@ -1,5 +1,21 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Send, Users, MessageSquare, Shield, Smile, ToggleLeft, ToggleRight, Image as ImageIcon, X, Mic } from 'lucide-react'
+import {
+  Send,
+  Users,
+  MessageSquare,
+  Shield,
+  Smile,
+  ToggleLeft,
+  ToggleRight,
+  Image as ImageIcon,
+  X,
+  Mic,
+  Lock,
+  Unlock,
+  KeyRound,
+  Minus,
+  Plus,
+} from 'lucide-react'
 import type { ChatMessage, Participant } from '@/types/party.types'
 import { MediaAttachmentModal } from './MediaAttachmentModal'
 import { VoiceNotePlayer } from './VoiceNotePlayer'
@@ -12,6 +28,12 @@ interface PartyChatProps {
   isHost: boolean
   isHostOnlyControl: boolean
   onToggleControlMode: () => void
+  isRoomLocked?: boolean
+  onToggleRoomLock?: () => void
+  roomPasscode?: string
+  onUpdateRoomPasscode?: (code: string) => void
+  maxCapacity?: number
+  onUpdateMaxCapacity?: (cap: number) => void
   onSendMessage: (text: string, imageUrl?: string, audioUrl?: string, audioDuration?: number) => void
   onSendTypingStatus?: (isTyping: boolean) => void
   onTriggerReaction: (emoji: string) => void
@@ -32,6 +54,12 @@ export const PartyChat: React.FC<PartyChatProps> = ({
   isHost,
   isHostOnlyControl,
   onToggleControlMode,
+  isRoomLocked = false,
+  onToggleRoomLock,
+  roomPasscode = '',
+  onUpdateRoomPasscode,
+  maxCapacity = 10,
+  onUpdateMaxCapacity,
   onSendMessage,
   onSendTypingStatus,
   onTriggerReaction,
@@ -42,6 +70,8 @@ export const PartyChat: React.FC<PartyChatProps> = ({
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
   const [isVoiceRecording, setIsVoiceRecording] = useState<boolean>(false)
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState<boolean>(false)
+  const [passcodeDraft, setPasscodeDraft] = useState<string>(roomPasscode || '')
+  const [isEditingPasscode, setIsEditingPasscode] = useState<boolean>(false)
   const emojiPickerRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
@@ -163,52 +193,375 @@ export const PartyChat: React.FC<PartyChatProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '0.5rem',
+            gap: '0.45rem',
             transition: 'color 0.2s',
           }}
         >
           <Users size={16} />
-          <span>People ({participants.length})</span>
+          <span>People ({participants.length}/{maxCapacity})</span>
+          {isRoomLocked && (
+            <span title="Room Locked" style={{ display: 'inline-flex', alignItems: 'center' }}>
+              <Lock size={12} color="#f87171" />
+            </span>
+          )}
+          {Boolean(roomPasscode) && (
+            <span title={`Passcode Protected ("${roomPasscode}")`} style={{ display: 'inline-flex', alignItems: 'center' }}>
+              <KeyRound size={12} color="#c084fc" />
+            </span>
+          )}
         </button>
       </div>
 
       {/* People Tab Content */}
       {activeTab === 'people' && (
-        <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {/* Host Controls Permission Box */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+          {/* Host Controls Section */}
           {isHost && (
-            <div
-              style={{
-                padding: '0.85rem',
-                borderRadius: 'var(--radius-md)',
-                background: 'rgba(139, 92, 246, 0.1)',
-                border: '1px solid rgba(139, 92, 246, 0.25)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <div>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                  Host Only Controls
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+              {/* Host Only Controls Toggle */}
+              <div
+                style={{
+                  padding: '0.75rem 0.85rem',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'rgba(139, 92, 246, 0.08)',
+                  border: '1px solid rgba(139, 92, 246, 0.22)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                    Host Only Controls
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '2px' }}>
+                    {isHostOnlyControl ? 'Only host controls playback' : 'Anyone can control video'}
+                  </div>
                 </div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
-                  {isHostOnlyControl ? 'Only you can play, pause & seek' : 'All participants can control video'}
+                <button
+                  onClick={onToggleControlMode}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-purple)', padding: '0.2rem' }}
+                  title="Toggle host only control"
+                >
+                  {isHostOnlyControl ? <ToggleRight size={26} /> : <ToggleLeft size={26} color="var(--text-dim)" />}
+                </button>
+              </div>
+
+              {/* 1-Tap Lock Room Toggle */}
+              <div
+                style={{
+                  padding: '0.75rem 0.85rem',
+                  borderRadius: 'var(--radius-md)',
+                  background: isRoomLocked ? 'rgba(234, 56, 62, 0.12)' : 'rgba(255, 255, 255, 0.04)',
+                  border: isRoomLocked ? '1px solid rgba(234, 56, 62, 0.35)' : '1px solid var(--border-subtle)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  transition: 'all 0.2s',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                  <div
+                    style={{
+                      width: '30px',
+                      height: '30px',
+                      borderRadius: '8px',
+                      background: isRoomLocked ? 'rgba(234, 56, 62, 0.2)' : 'rgba(255, 255, 255, 0.06)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: isRoomLocked ? '#ff6b6b' : 'var(--text-dim)',
+                    }}
+                  >
+                    {isRoomLocked ? <Lock size={15} /> : <Unlock size={15} />}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: isRoomLocked ? '#ff6b6b' : 'var(--text-main)' }}>
+                      Lock Room {isRoomLocked ? '(Locked)' : ''}
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '2px' }}>
+                      {isRoomLocked ? 'Prevent new guests from joining' : 'Anyone with link can join'}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={onToggleRoomLock}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: isRoomLocked ? '#ff6b6b' : 'var(--text-dim)',
+                    padding: '0.2rem',
+                  }}
+                  title={isRoomLocked ? 'Unlock Room' : 'Lock Room'}
+                  aria-label={isRoomLocked ? 'Unlock Room' : 'Lock Room'}
+                >
+                  {isRoomLocked ? <ToggleRight size={26} /> : <ToggleLeft size={26} />}
+                </button>
+              </div>
+
+              {/* Room Passcode / PIN Protection */}
+              <div
+                style={{
+                  padding: '0.75rem 0.85rem',
+                  borderRadius: 'var(--radius-md)',
+                  background: roomPasscode ? 'rgba(168, 85, 247, 0.1)' : 'rgba(255, 255, 255, 0.04)',
+                  border: roomPasscode ? '1px solid rgba(168, 85, 247, 0.35)' : '1px solid var(--border-subtle)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.6rem',
+                  transition: 'all 0.2s',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                    <div
+                      style={{
+                        width: '30px',
+                        height: '30px',
+                        borderRadius: '8px',
+                        background: roomPasscode ? 'rgba(168, 85, 247, 0.2)' : 'rgba(255, 255, 255, 0.06)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: roomPasscode ? '#c084fc' : 'var(--text-dim)',
+                      }}
+                    >
+                      <KeyRound size={15} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600, color: roomPasscode ? '#c084fc' : 'var(--text-main)' }}>
+                        Passcode Protection {roomPasscode ? `("${roomPasscode}")` : ''}
+                      </div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '2px' }}>
+                        {roomPasscode
+                          ? 'Guests must enter this passcode to join'
+                          : 'Optional PIN or password to lock room'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {!isEditingPasscode && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPasscodeDraft(roomPasscode || '')
+                        setIsEditingPasscode(true)
+                      }}
+                      style={{
+                        background: roomPasscode ? 'rgba(168, 85, 247, 0.18)' : 'rgba(255, 255, 255, 0.08)',
+                        border: '1px solid ' + (roomPasscode ? 'rgba(168, 85, 247, 0.4)' : 'rgba(255, 255, 255, 0.15)'),
+                        color: roomPasscode ? '#e9d5ff' : 'var(--text-main)',
+                        borderRadius: '6px',
+                        padding: '0.3rem 0.65rem',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {roomPasscode ? 'Change PIN' : 'Set PIN'}
+                    </button>
+                  )}
+                </div>
+
+                {isEditingPasscode && (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      onUpdateRoomPasscode?.(passcodeDraft.trim())
+                      setIsEditingPasscode(false)
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.45rem',
+                      marginTop: '0.2rem',
+                    }}
+                  >
+                    <input
+                      type="text"
+                      value={passcodeDraft}
+                      maxLength={20}
+                      onChange={(e) => setPasscodeDraft(e.target.value)}
+                      placeholder="e.g. 1234 or cinema"
+                      autoFocus
+                      style={{
+                        flex: 1,
+                        padding: '0.45rem 0.75rem',
+                        borderRadius: '6px',
+                        background: 'rgba(0, 0, 0, 0.35)',
+                        border: '1px solid rgba(168, 85, 247, 0.5)',
+                        color: '#ffffff',
+                        fontSize: '0.85rem',
+                        outline: 'none',
+                      }}
+                    />
+                    <button
+                      type="submit"
+                      style={{
+                        padding: '0.45rem 0.75rem',
+                        borderRadius: '6px',
+                        background: '#7c3aed',
+                        border: 'none',
+                        color: '#ffffff',
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Save
+                    </button>
+                    {roomPasscode && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPasscodeDraft('')
+                          onUpdateRoomPasscode?.('')
+                          setIsEditingPasscode(false)
+                        }}
+                        style={{
+                          padding: '0.45rem 0.65rem',
+                          borderRadius: '6px',
+                          background: 'rgba(239, 68, 68, 0.15)',
+                          border: '1px solid rgba(239, 68, 68, 0.35)',
+                          color: '#f87171',
+                          fontSize: '0.78rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Remove
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPasscodeDraft(roomPasscode || '')
+                        setIsEditingPasscode(false)
+                      }}
+                      style={{
+                        padding: '0.45rem 0.55rem',
+                        borderRadius: '6px',
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--text-dim)',
+                        fontSize: '0.78rem',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </form>
+                )}
+              </div>
+
+              {/* Room Capacity Stepper (Default 10, Max 15) */}
+              <div
+                style={{
+                  padding: '0.75rem 0.85rem',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'rgba(255, 255, 255, 0.04)',
+                  border: '1px solid var(--border-subtle)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                    Room Capacity Limit
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '2px' }}>
+                    Default 10, Max 15 ({participants.length}/{maxCapacity} joined)
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                  <button
+                    type="button"
+                    disabled={maxCapacity <= Math.max(2, participants.length)}
+                    onClick={() => onUpdateMaxCapacity?.(maxCapacity - 1)}
+                    style={{
+                      width: '26px',
+                      height: '26px',
+                      borderRadius: '6px',
+                      border: '1px solid rgba(255, 255, 255, 0.12)',
+                      background: 'rgba(255, 255, 255, 0.06)',
+                      color: maxCapacity <= Math.max(2, participants.length) ? 'rgba(255, 255, 255, 0.2)' : '#fff',
+                      cursor: maxCapacity <= Math.max(2, participants.length) ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                    title="Decrease capacity"
+                  >
+                    <Minus size={13} />
+                  </button>
+
+                  <span
+                    style={{
+                      fontSize: '0.85rem',
+                      fontWeight: 700,
+                      color: 'var(--text-main)',
+                      minWidth: '22px',
+                      textAlign: 'center',
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
+                    {maxCapacity}
+                  </span>
+
+                  <button
+                    type="button"
+                    disabled={maxCapacity >= 15}
+                    onClick={() => onUpdateMaxCapacity?.(maxCapacity + 1)}
+                    style={{
+                      width: '26px',
+                      height: '26px',
+                      borderRadius: '6px',
+                      border: '1px solid rgba(255, 255, 255, 0.12)',
+                      background: 'rgba(255, 255, 255, 0.06)',
+                      color: maxCapacity >= 15 ? 'rgba(255, 255, 255, 0.2)' : '#fff',
+                      cursor: maxCapacity >= 15 ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                    title="Increase capacity (max 15)"
+                  >
+                    <Plus size={13} />
+                  </button>
                 </div>
               </div>
-              <button
-                onClick={onToggleControlMode}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-purple)' }}
-              >
-                {isHostOnlyControl ? <ToggleRight size={28} /> : <ToggleLeft size={28} color="var(--text-dim)" />}
-              </button>
+            </div>
+          )}
+
+          {/* Guest Locked Banner */}
+          {!isHost && isRoomLocked && (
+            <div
+              style={{
+                padding: '0.6rem 0.85rem',
+                borderRadius: '8px',
+                background: 'rgba(234, 56, 62, 0.12)',
+                border: '1px solid rgba(234, 56, 62, 0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                color: '#ff6b6b',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+              }}
+            >
+              <Lock size={14} />
+              <span>Private Party: Room locked by host</span>
             </div>
           )}
 
           {/* Participants list */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-dim)' }}>
-              In This Room ({participants.length})
+              In This Room ({participants.length}/{maxCapacity})
             </span>
             {participants.map((p) => (
               <div

@@ -326,6 +326,44 @@ export class PeerService {
     }
   }
 
+  /**
+   * Send a packet directly to a specific connected guest peer
+   */
+  public sendToGuest(targetPeerId: string, packet: PartyPacket): void {
+    const conn = this.guestConnections.get(targetPeerId)
+    if (conn && conn.open) {
+      try {
+        conn.send(packet)
+      } catch {
+        // handle transient error
+      }
+    }
+  }
+
+  /**
+   * Disconnect a specific guest peer from the host
+   */
+  public disconnectGuest(targetPeerId: string): void {
+    const conn = this.guestConnections.get(targetPeerId)
+    if (conn) {
+      try {
+        conn.close()
+      } catch {
+        // ignore
+      }
+      this.guestConnections.delete(targetPeerId)
+    }
+    const call = this.mediaCalls.get(targetPeerId)
+    if (call) {
+      try {
+        call.close()
+      } catch {
+        // ignore
+      }
+      this.mediaCalls.delete(targetPeerId)
+    }
+  }
+
   private handleIncomingData(data: unknown): void {
     if (data && typeof data === 'object' && 'type' in data) {
       const packet = data as PartyPacket

@@ -26,6 +26,7 @@ import type {
   PartyPacket,
   SyncPayload,
   ControlPayload,
+  JoinRejectedPayload,
 } from '@/types/party.types'
 
 const DRIFT_TOLERANCE_SECONDS = 1.8
@@ -63,7 +64,32 @@ export function useWatchParty() {
     posterUrl: '',
     isHostOnlyControl: true,
     hostId: '',
+    maxCapacity: 10,
+    isLocked: false,
   })
+
+  // Room Privacy & Capacity Settings
+  const [maxCapacity, setMaxCapacity] = useState<number>(10)
+  const [isRoomLocked, setIsRoomLocked] = useState<boolean>(false)
+  const [roomPasscode, setRoomPasscode] = useState<string>('')
+
+  const maxCapacityRef = useRef<number>(10)
+  const isRoomLockedRef = useRef<boolean>(false)
+  const roomPasscodeRef = useRef<string>('')
+  const joinPasscodeRef = useRef<string>('')
+  const isJoinRejectedRef = useRef<boolean>(false)
+
+  useEffect(() => {
+    maxCapacityRef.current = maxCapacity
+  }, [maxCapacity])
+
+  useEffect(() => {
+    isRoomLockedRef.current = isRoomLocked
+  }, [isRoomLocked])
+
+  useEffect(() => {
+    roomPasscodeRef.current = roomPasscode
+  }, [roomPasscode])
 
   // Participants & Chat
   const [participants, setParticipants] = useState<Participant[]>([])
@@ -81,6 +107,7 @@ export function useWatchParty() {
 
   const roomIdRef = useRef<string>(roomId)
   const messagesRef = useRef<ChatMessage[]>([])
+  const participantsRef = useRef<Participant[]>([])
 
   useEffect(() => {
     roomIdRef.current = roomId
@@ -89,6 +116,10 @@ export function useWatchParty() {
   useEffect(() => {
     messagesRef.current = messages
   }, [messages])
+
+  useEffect(() => {
+    participantsRef.current = participants
+  }, [participants])
 
   const appendMessage = useCallback((msg: ChatMessage) => {
     setMessages((prev) => {
@@ -530,14 +561,80 @@ export function useWatchParty() {
           break
         }
 
+        case 'ROOM_METADATA': {
+          const meta = packet.payload as RoomMetadata
+          setRoomMetadata(meta)
+          if (typeof meta.maxCapacity === 'number') {
+            setMaxCapacity(meta.maxCapacity)
+          }
+          if (typeof meta.isLocked === 'boolean') {
+            setIsRoomLocked(meta.isLocked)
+          }
+          break
+        }
+
         case 'JOIN_REQUEST': {
           // When someone asks to join, host responds with current metadata, playback state, and host info
-          const req = packet.payload as { peerId: string; userName: string }
+          const req = packet.payload as { peerId: string; userName: string; passcode?: string }
           if (req && req.peerId && req.userName) {
             participantNamesRef.current[req.peerId] = req.userName
           }
 
           if (isHost) {
+            const guestPeerId = req.peerId
+            const isAlreadyParticipant = participantsRef.current.some((p) => p.id === guestPeerId)
+
+            // 1. Password Protected Room Check (if host set a passcode)
+            if (roomPasscodeRef.current && !isAlreadyParticipant) {
+              const guestPass = req.passcode?.trim() || ''
+              const expectedPass = roomPasscodeRef.current.trim()
+              if (!guestPass || guestPass !== expectedPass) {
+                peerService.sendToGuest(guestPeerId, {
+                  type: 'JOIN_REJECTED',
+                  senderId: peerService.myPeerId,
+                  senderName: userName,
+                  payload: {
+                    reason: 'WRONG_PASSCODE',
+                    message: guestPass ? 'Incorrect room passcode.' : 'This watch party is password protected.',
+                    requiresPasscode: true,
+                  },
+                })
+                setTimeout(() => peerService.disconnectGuest(guestPeerId), 800)
+                break
+              }
+            } else if (isRoomLockedRef.current && !isAlreadyParticipant) {
+              // 2. Strict Room Lock (no password, host locked the room to everyone)
+              peerService.sendToGuest(guestPeerId, {
+                type: 'JOIN_REJECTED',
+                senderId: peerService.myPeerId,
+                senderName: userName,
+                payload: {
+                  reason: 'ROOM_LOCKED',
+                  message: 'This watch party is locked by the host.',
+                },
+              })
+              setTimeout(() => peerService.disconnectGuest(guestPeerId), 800)
+              break
+            }
+
+            // 3. Room Capacity Limit (default 10, max 15)
+            const currentCap = maxCapacityRef.current || 10
+            if (participantsRef.current.length >= currentCap && !isAlreadyParticipant) {
+              peerService.sendToGuest(guestPeerId, {
+                type: 'JOIN_REJECTED',
+                senderId: peerService.myPeerId,
+                senderName: userName,
+                payload: {
+                  reason: 'ROOM_FULL',
+                  message: `This room is full (max ${currentCap} participants reached).`,
+                  maxCapacity: currentCap,
+                  currentCount: participantsRef.current.length,
+                },
+              })
+              setTimeout(() => peerService.disconnectGuest(guestPeerId), 800)
+              break
+            }
+
             addSystemNotice(`${packet.senderName} joined the party!`)
             confetti({ particleCount: 30, spread: 45 })
 
@@ -573,12 +670,16 @@ export function useWatchParty() {
               return updated
             })
 
-            peerService.send({
+            peerService.sendToGuest(guestPeerId, {
               type: 'JOIN_ACK',
               senderId: peerService.myPeerId,
               senderName: userName,
               payload: {
-                roomMetadata,
+                roomMetadata: {
+                  ...roomMetadata,
+                  maxCapacity: maxCapacityRef.current,
+                  isLocked: isRoomLockedRef.current,
+                },
                 currentState: {
                   isPlaying: getIsPlayingState(),
                   currentTime: getCurrentPlaybackTime(),
@@ -588,6 +689,15 @@ export function useWatchParty() {
               },
             })
           }
+          break
+        }
+
+        case 'JOIN_REJECTED': {
+          const payload = packet.payload as JoinRejectedPayload
+          isJoinRejectedRef.current = true
+          setRoomExpiredReason(payload?.message || 'Unable to join watch party')
+          setIsRoomExpired(true)
+          setConnectionStatus('disconnected')
           break
         }
 
@@ -682,6 +792,12 @@ export function useWatchParty() {
             chatHistory?: ChatMessage[]
           }
           setRoomMetadata(ack.roomMetadata)
+          if (typeof ack.roomMetadata?.maxCapacity === 'number') {
+            setMaxCapacity(ack.roomMetadata.maxCapacity)
+          }
+          if (typeof ack.roomMetadata?.isLocked === 'boolean') {
+            setIsRoomLocked(ack.roomMetadata.isLocked)
+          }
           if (ack.chatHistory && ack.chatHistory.length > 0) {
             setMessages((prev) => {
               const existingIds = new Set(prev.map((m) => m.id))
@@ -757,6 +873,16 @@ export function useWatchParty() {
         }
 
         const parsed = parseMediaUrl(initialMeta?.streamUrl || '', initialMeta?.roomTitle)
+        const initCap = Math.max(2, Math.min(15, initialMeta?.maxCapacity ?? 10))
+        const initLocked = Boolean(initialMeta?.isLocked)
+        const initPasscode = initialMeta?.passcode || ''
+        setMaxCapacity(initCap)
+        maxCapacityRef.current = initCap
+        setIsRoomLocked(initLocked)
+        isRoomLockedRef.current = initLocked
+        setRoomPasscode(initPasscode)
+        roomPasscodeRef.current = initPasscode
+
         const meta: RoomMetadata = {
           roomId: id,
           roomTitle: initialMeta?.roomTitle || parsed.title || 'Movie Watch Party',
@@ -764,6 +890,9 @@ export function useWatchParty() {
           posterUrl: initialMeta?.posterUrl || '',
           isHostOnlyControl: true,
           hostId: id,
+          maxCapacity: initCap,
+          isLocked: initLocked,
+          passcode: initPasscode,
         }
         setRoomMetadata(meta)
         saveHostSession(id, meta)
@@ -803,14 +932,18 @@ export function useWatchParty() {
 
   // Join existing Room as Guest
   const joinRoom = useCallback(
-    async (targetRoomId: string) => {
+    async (targetRoomId: string, passcode?: string) => {
       if (!targetRoomId.trim()) return
 
       try {
         setConnectionStatus('connecting')
         setErrorMessage(null)
+        isJoinRejectedRef.current = false
         setIsRoomExpired(false)
         setRoomExpiredReason('')
+        if (passcode !== undefined) {
+          joinPasscodeRef.current = passcode.trim()
+        }
         const cleanId = targetRoomId.trim()
         setRoomId(cleanId)
         setIsHost(false)
@@ -841,12 +974,12 @@ export function useWatchParty() {
           roomId: cleanId,
         })
 
-        // Send join request to host
+        // Send join request to host with optional passcode
         peerService.send({
           type: 'JOIN_REQUEST',
           senderId: peerService.myPeerId,
           senderName: userName,
-          payload: { peerId: peerService.myPeerId, userName },
+          payload: { peerId: peerService.myPeerId, userName, passcode: joinPasscodeRef.current || undefined },
         })
 
         setParticipants([
@@ -940,6 +1073,11 @@ export function useWatchParty() {
 
       if (err) {
         if (err === 'ROOM_EXPIRED' || err === 'HOST_LEFT') {
+          // If connection closed because host rejected our join request (e.g. locked, full, wrong passcode),
+          // DO NOT overwrite the rejection reason or trigger host reconnect/solo watch!
+          if (isJoinRejectedRef.current) {
+            return
+          }
           // If we are guest and previously connected, give host a 35s grace window to reload
           if (!isHost && roomIdRef.current && !isRoomExpired) {
             startHostReconnectGracePeriod()
@@ -1221,6 +1359,66 @@ export function useWatchParty() {
     window.location.href = '/'
   }, [])
 
+  // Toggle Room Lock
+  const toggleRoomLock = useCallback(() => {
+    setIsRoomLocked((prev) => {
+      const next = !prev
+      isRoomLockedRef.current = next
+      setRoomMetadata((m) => {
+        const updated: RoomMetadata = { ...m, isLocked: next }
+        peerService.send({
+          type: 'ROOM_METADATA',
+          senderId: peerService.myPeerId,
+          senderName: userName,
+          payload: updated,
+        })
+        return updated
+      })
+      addSystemNotice(next ? '🔒 Room is now locked to new guests.' : '🔓 Room is now unlocked.')
+      return next
+    })
+  }, [userName, addSystemNotice])
+
+  // Update Max Room Capacity (default 10, max 15)
+  const updateMaxCapacity = useCallback((newCap: number) => {
+    const clamped = Math.max(2, Math.min(15, newCap))
+    setMaxCapacity(clamped)
+    maxCapacityRef.current = clamped
+    setRoomMetadata((m) => {
+      const updated: RoomMetadata = { ...m, maxCapacity: clamped }
+      peerService.send({
+        type: 'ROOM_METADATA',
+        senderId: peerService.myPeerId,
+        senderName: userName,
+        payload: updated,
+      })
+      return updated
+    })
+    addSystemNotice(`Room capacity set to ${clamped} participants (max 15).`)
+  }, [userName, addSystemNotice])
+
+  // Update Room Passcode
+  const updateRoomPasscode = useCallback((pass: string) => {
+    const trimmed = pass.trim()
+    setRoomPasscode(trimmed)
+    roomPasscodeRef.current = trimmed
+    setRoomMetadata((m) => {
+      const updated: RoomMetadata = { ...m, passcode: trimmed || undefined }
+      peerService.send({
+        type: 'ROOM_METADATA',
+        senderId: peerService.myPeerId,
+        senderName: userName,
+        payload: updated,
+      })
+      return updated
+    })
+    addSystemNotice(
+      trimmed
+        ? `🔒 Room passcode set to "${trimmed}". Guests must enter it to join.`
+        : '🔓 Room passcode removed. Anyone with the link can join.'
+    )
+  }, [userName, addSystemNotice])
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -1245,6 +1443,12 @@ export function useWatchParty() {
     takeOverAsHost,
     roomId,
     isHost,
+    isRoomLocked,
+    toggleRoomLock,
+    maxCapacity,
+    updateMaxCapacity,
+    roomPasscode,
+    updateRoomPasscode,
     userName,
     updateUserName,
     roomMetadata,

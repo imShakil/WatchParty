@@ -29,6 +29,12 @@ export function App() {
     dismissRoomExpired,
     roomId,
     isHost,
+    isRoomLocked,
+    toggleRoomLock,
+    roomPasscode,
+    updateRoomPasscode,
+    maxCapacity,
+    updateMaxCapacity,
     userName,
     updateUserName,
     roomMetadata,
@@ -111,7 +117,7 @@ export function App() {
   ) => {
     const defaultStream =
       urlStream || streamUrl || 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8'
-    const defaultTitle = urlTitle || title || 'Live Watch Party'
+    const defaultTitle = urlTitle || title || 'DekhoPrime Watch Party'
     const defaultPoster = posterUrl || undefined
 
     startHost(customRoomId, {
@@ -235,6 +241,12 @@ export function App() {
           isHost={isHost}
           isHostOnlyControl={roomMetadata.isHostOnlyControl}
           onToggleControlMode={toggleHostOnlyControl}
+          isRoomLocked={isRoomLocked}
+          onToggleRoomLock={toggleRoomLock}
+          roomPasscode={roomPasscode}
+          onUpdateRoomPasscode={updateRoomPasscode}
+          maxCapacity={maxCapacity}
+          onUpdateMaxCapacity={updateMaxCapacity}
           onSendMessage={sendChatMessage}
           onSendTypingStatus={sendTypingStatus}
           onTriggerReaction={triggerReaction}
@@ -262,6 +274,7 @@ export function App() {
         onReturnHome={dismissRoomExpired}
         onKeepWatchingSolo={continueWatchingSolo}
         onTakeOverHost={takeOverAsHost}
+        onJoinWithPasscode={(passcode) => joinRoom(roomId || urlRoom || '', passcode)}
         onHostParty={() => {
           dismissRoomExpired()
           window.location.href = '/?action=host'

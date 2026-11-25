@@ -10,12 +10,21 @@ export type PartyMessageType =
   | 'ROOM_METADATA'
   | 'JOIN_REQUEST'
   | 'JOIN_ACK'
+  | 'JOIN_REJECTED'
   | 'CONTROL_MODE_CHANGE'
   | 'PARTICIPANT_INFO'
   | 'PARTICIPANT_ROSTER'
   | 'ROOM_CLOSED'
   | 'TYPING_STATUS'
   | 'PEER_LEFT'
+
+export interface JoinRejectedPayload {
+  reason: 'ROOM_FULL' | 'ROOM_LOCKED' | 'WRONG_PASSCODE'
+  message: string
+  maxCapacity?: number
+  currentCount?: number
+  requiresPasscode?: boolean
+}
 
 export interface SyncPayload {
   isPlaying: boolean
@@ -67,6 +76,9 @@ export interface RoomMetadata {
   isHostOnlyControl: boolean
   hostId: string
   isP2PStream?: boolean
+  maxCapacity?: number // default 10, max 15
+  isLocked?: boolean
+  passcode?: string
 }
 
 export interface PartyPacket<T = unknown> {

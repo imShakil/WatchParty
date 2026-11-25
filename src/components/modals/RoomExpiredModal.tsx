@@ -1,5 +1,17 @@
 import React, { useEffect, useState } from 'react'
-import { Clapperboard, Home, PlusCircle, AlertCircle, RefreshCw, Play, Crown } from 'lucide-react'
+import {
+  Clapperboard,
+  Home,
+  PlusCircle,
+  AlertCircle,
+  RefreshCw,
+  Play,
+  Crown,
+  Users,
+  Lock,
+  KeyRound,
+  ArrowRight,
+} from 'lucide-react'
 
 interface RoomExpiredModalProps {
   isOpen: boolean
@@ -10,6 +22,7 @@ interface RoomExpiredModalProps {
   onHostParty?: () => void
   onKeepWatchingSolo?: () => void
   onTakeOverHost?: () => void
+  onJoinWithPasscode?: (passcode: string) => void
 }
 
 export const RoomExpiredModal: React.FC<RoomExpiredModalProps> = ({
@@ -21,13 +34,23 @@ export const RoomExpiredModal: React.FC<RoomExpiredModalProps> = ({
   onHostParty,
   onKeepWatchingSolo,
   onTakeOverHost,
+  onJoinWithPasscode,
 }) => {
-  const [countdown, setCountdown] = useState<number>(10)
-  const [isPaused, setIsPaused] = useState<boolean>(false)
+  const isRoomFull = Boolean(reason && reason.toLowerCase().includes('full'))
+  const isRoomLocked = Boolean(reason && reason.toLowerCase().includes('locked'))
+  const isWrongPasscode = Boolean(
+    reason && (reason.toLowerCase().includes('passcode') || reason.toLowerCase().includes('password'))
+  )
+  const isRejectedFromJoin = isRoomFull || isRoomLocked || isWrongPasscode
 
-  // Countdown timer for automatic return to home
+  const [countdown, setCountdown] = useState<number>(10)
+  const [isPaused, setIsPaused] = useState<boolean>(isWrongPasscode)
+  const [enteredPasscode, setEnteredPasscode] = useState<string>('')
+  const [passcodeError, setPasscodeError] = useState<string>('')
+
+  // Countdown timer for automatic return to home (only when not password-prompted and not paused)
   useEffect(() => {
-    if (!isOpen || isPaused) return
+    if (!isOpen || isPaused || isWrongPasscode) return
 
     if (countdown <= 0) {
       onReturnHome()
@@ -39,9 +62,20 @@ export const RoomExpiredModal: React.FC<RoomExpiredModalProps> = ({
     }, 1000)
 
     return () => clearInterval(timer)
-  }, [isOpen, countdown, isPaused, onReturnHome])
+  }, [isOpen, countdown, isPaused, isWrongPasscode, onReturnHome])
 
   if (!isOpen) return null
+
+  const handlePasscodeSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const trimmed = enteredPasscode.trim()
+    if (!trimmed) {
+      setPasscodeError('Please enter a passcode')
+      return
+    }
+    setPasscodeError('')
+    onJoinWithPasscode?.(trimmed)
+  }
 
   const displayReason =
     reason ||
@@ -70,8 +104,16 @@ export const RoomExpiredModal: React.FC<RoomExpiredModalProps> = ({
           maxWidth: '460px',
           background: 'rgba(16, 18, 27, 0.96)',
           borderRadius: 'var(--radius-lg, 16px)',
-          border: '1px solid rgba(234, 56, 62, 0.3)',
-          boxShadow: '0 24px 64px rgba(0, 0, 0, 0.85), 0 0 35px rgba(234, 56, 62, 0.12)',
+          border: isWrongPasscode
+            ? '1px solid rgba(168, 85, 247, 0.35)'
+            : isRoomFull
+            ? '1px solid rgba(251, 191, 36, 0.35)'
+            : isRoomLocked
+            ? '1px solid rgba(239, 68, 68, 0.35)'
+            : '1px solid rgba(234, 56, 62, 0.3)',
+          boxShadow: isWrongPasscode
+            ? '0 24px 64px rgba(0, 0, 0, 0.85), 0 0 35px rgba(168, 85, 247, 0.15)'
+            : '0 24px 64px rgba(0, 0, 0, 0.85), 0 0 35px rgba(234, 56, 62, 0.12)',
           padding: '2rem 1.75rem',
           display: 'flex',
           flexDirection: 'column',
@@ -80,21 +122,47 @@ export const RoomExpiredModal: React.FC<RoomExpiredModalProps> = ({
           gap: '1.25rem',
         }}
       >
-        {/* Animated Theater Closed Icon */}
+        {/* Animated Theater Closed / Full / Locked / Passcode Icon */}
         <div
           style={{
             width: '64px',
             height: '64px',
             borderRadius: '50%',
-            background: 'linear-gradient(135deg, rgba(234, 56, 62, 0.2), rgba(139, 92, 246, 0.15))',
-            border: '1px solid rgba(234, 56, 62, 0.4)',
+            background: isWrongPasscode
+              ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.25), rgba(126, 34, 206, 0.15))'
+              : isRoomFull
+              ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(245, 158, 11, 0.15))'
+              : isRoomLocked
+              ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(185, 28, 28, 0.15))'
+              : 'linear-gradient(135deg, rgba(234, 56, 62, 0.2), rgba(139, 92, 246, 0.15))',
+            border: isWrongPasscode
+              ? '1px solid rgba(168, 85, 247, 0.45)'
+              : isRoomFull
+              ? '1px solid rgba(251, 191, 36, 0.4)'
+              : isRoomLocked
+              ? '1px solid rgba(239, 68, 68, 0.4)'
+              : '1px solid rgba(234, 56, 62, 0.4)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 8px 24px rgba(234, 56, 62, 0.25)',
+            boxShadow: isWrongPasscode
+              ? '0 8px 24px rgba(168, 85, 247, 0.25)'
+              : isRoomFull
+              ? '0 8px 24px rgba(251, 191, 36, 0.25)'
+              : isRoomLocked
+              ? '0 8px 24px rgba(239, 68, 68, 0.25)'
+              : '0 8px 24px rgba(234, 56, 62, 0.25)',
           }}
         >
-          <Clapperboard size={32} color="#ea383e" />
+          {isWrongPasscode ? (
+            <KeyRound size={32} color="#c084fc" />
+          ) : isRoomFull ? (
+            <Users size={32} color="#fbbf24" />
+          ) : isRoomLocked ? (
+            <Lock size={32} color="#f87171" />
+          ) : (
+            <Clapperboard size={32} color="#ea383e" />
+          )}
         </div>
 
         {/* Status Badge */}
@@ -105,17 +173,41 @@ export const RoomExpiredModal: React.FC<RoomExpiredModalProps> = ({
             gap: '0.4rem',
             padding: '0.3rem 0.85rem',
             borderRadius: '999px',
-            background: 'rgba(234, 56, 62, 0.14)',
-            border: '1px solid rgba(234, 56, 62, 0.35)',
+            background: isWrongPasscode
+              ? 'rgba(168, 85, 247, 0.15)'
+              : isRoomFull
+              ? 'rgba(251, 191, 36, 0.14)'
+              : isRoomLocked
+              ? 'rgba(239, 68, 68, 0.14)'
+              : 'rgba(234, 56, 62, 0.14)',
+            border: isWrongPasscode
+              ? '1px solid rgba(168, 85, 247, 0.4)'
+              : isRoomFull
+              ? '1px solid rgba(251, 191, 36, 0.35)'
+              : isRoomLocked
+              ? '1px solid rgba(239, 68, 68, 0.35)'
+              : '1px solid rgba(234, 56, 62, 0.35)',
             fontSize: '0.75rem',
             fontWeight: 700,
             letterSpacing: '0.08em',
             textTransform: 'uppercase',
-            color: '#ff6b6b',
+            color: isWrongPasscode
+              ? '#c084fc'
+              : isRoomFull
+              ? '#fbbf24'
+              : isRoomLocked
+              ? '#f87171'
+              : '#ff6b6b',
           }}
         >
           <AlertCircle size={13} />
-          Theater Closed
+          {isWrongPasscode
+            ? 'Password Protected'
+            : isRoomFull
+            ? 'Room at Capacity'
+            : isRoomLocked
+            ? 'Private Party'
+            : 'Theater Closed'}
         </div>
 
         {/* Headings */}
@@ -123,14 +215,22 @@ export const RoomExpiredModal: React.FC<RoomExpiredModalProps> = ({
           <h2
             id="room-expired-title"
             style={{
-              fontSize: '1.4rem',
+              fontSize: '1.35rem',
               fontWeight: 800,
               color: '#ffffff',
               margin: '0 0 0.5rem 0',
               fontFamily: 'var(--font-display, sans-serif)',
             }}
           >
-            {roomTitle ? `"${roomTitle}" Has Ended` : 'This Watch Party Has Ended'}
+            {isWrongPasscode
+              ? 'Passcode Required'
+              : isRoomFull
+              ? 'Watch Party is Full'
+              : isRoomLocked
+              ? 'Watch Party is Locked'
+              : roomTitle
+              ? `"${roomTitle}" Has Ended`
+              : 'This Watch Party Has Ended'}
           </h2>
           <p
             style={{
@@ -140,7 +240,9 @@ export const RoomExpiredModal: React.FC<RoomExpiredModalProps> = ({
               margin: 0,
             }}
           >
-            {displayReason}
+            {isWrongPasscode
+              ? reason || 'This watch party is password protected. Enter the host passcode to enter.'
+              : displayReason}
           </p>
           {roomId && (
             <div
@@ -156,43 +258,119 @@ export const RoomExpiredModal: React.FC<RoomExpiredModalProps> = ({
           )}
         </div>
 
-        {/* Auto-redirect note */}
-        <div
-          style={{
-            width: '100%',
-            padding: '0.65rem 0.9rem',
-            borderRadius: 'var(--radius-md, 8px)',
-            background: 'rgba(255, 255, 255, 0.04)',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
-            fontSize: '0.8rem',
-            color: 'var(--text-muted, #94a3b8)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <span>
-            {isPaused
-              ? 'Auto-redirect paused'
-              : `Returning to home in ${countdown}s...`}
-          </span>
-          <button
-            type="button"
-            onClick={() => setIsPaused((prev) => !prev)}
+        {/* Password Entry Form (when password protected or wrong passcode entered) */}
+        {isWrongPasscode && (
+          <form
+            onSubmit={handlePasscodeSubmit}
             style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--primary-red, #ea383e)',
-              cursor: 'pointer',
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              padding: '0.2rem 0.5rem',
-              borderRadius: '4px',
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.65rem',
+              marginTop: '0.25rem',
             }}
           >
-            {isPaused ? 'Resume' : 'Pause'}
-          </button>
-        </div>
+            <div style={{ position: 'relative', width: '100%' }}>
+              <input
+                type="password"
+                value={enteredPasscode}
+                onChange={(e) => {
+                  setEnteredPasscode(e.target.value)
+                  if (passcodeError) setPasscodeError('')
+                }}
+                placeholder="Enter passcode..."
+                maxLength={30}
+                autoFocus
+                style={{
+                  width: '100%',
+                  padding: '0.8rem 1rem',
+                  borderRadius: 'var(--radius-md, 8px)',
+                  background: 'rgba(255, 255, 255, 0.06)',
+                  border: passcodeError
+                    ? '1px solid #ef4444'
+                    : '1px solid rgba(168, 85, 247, 0.4)',
+                  color: '#ffffff',
+                  fontSize: '1rem',
+                  outline: 'none',
+                  textAlign: 'center',
+                  letterSpacing: '0.15em',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            {passcodeError && (
+              <span style={{ fontSize: '0.75rem', color: '#f87171', fontWeight: 600 }}>
+                {passcodeError}
+              </span>
+            )}
+
+            <button
+              type="submit"
+              style={{
+                width: '100%',
+                padding: '0.85rem 1rem',
+                fontSize: '0.92rem',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem',
+                background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
+                border: 'none',
+                borderRadius: 'var(--radius-md, 8px)',
+                color: '#ffffff',
+                cursor: 'pointer',
+                boxShadow: '0 4px 14px rgba(124, 58, 237, 0.4)',
+                transition: 'transform 0.15s ease',
+              }}
+            >
+              <KeyRound size={17} />
+              <span>Unlock & Join Party</span>
+              <ArrowRight size={16} />
+            </button>
+          </form>
+        )}
+
+        {/* Auto-redirect note (only shown when not prompted for passcode) */}
+        {!isWrongPasscode && (
+          <div
+            style={{
+              width: '100%',
+              padding: '0.65rem 0.9rem',
+              borderRadius: 'var(--radius-md, 8px)',
+              background: 'rgba(255, 255, 255, 0.04)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              fontSize: '0.8rem',
+              color: 'var(--text-muted, #94a3b8)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <span>
+              {isPaused
+                ? 'Auto-redirect paused'
+                : `Returning to home in ${countdown}s...`}
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsPaused((prev) => !prev)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--primary-red, #ea383e)',
+                cursor: 'pointer',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                padding: '0.2rem 0.5rem',
+                borderRadius: '4px',
+              }}
+            >
+              {isPaused ? 'Resume' : 'Pause'}
+            </button>
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div
@@ -204,10 +382,10 @@ export const RoomExpiredModal: React.FC<RoomExpiredModalProps> = ({
             marginTop: '0.25rem',
           }}
         >
-          {onKeepWatchingSolo && (
+          {/* Keep Watching Solo - Only allowed when room ended organically, NOT when rejected by lock/capacity/passcode */}
+          {!isRejectedFromJoin && onKeepWatchingSolo && (
             <button
               type="button"
-              className="btn btn-primary"
               onClick={onKeepWatchingSolo}
               style={{
                 width: '100%',
@@ -219,6 +397,11 @@ export const RoomExpiredModal: React.FC<RoomExpiredModalProps> = ({
                 justifyContent: 'center',
                 gap: '0.5rem',
                 background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
+                border: 'none',
+                borderRadius: 'var(--radius-md, 8px)',
+                color: '#ffffff',
+                cursor: 'pointer',
+                boxShadow: '0 4px 14px rgba(124, 58, 237, 0.35)',
               }}
             >
               <Play size={18} fill="currentColor" />
@@ -226,10 +409,10 @@ export const RoomExpiredModal: React.FC<RoomExpiredModalProps> = ({
             </button>
           )}
 
-          {onTakeOverHost && (
+          {/* Take Over & Host for Group - Only allowed when host disconnected organically, NOT when guest was rejected */}
+          {!isRejectedFromJoin && onTakeOverHost && (
             <button
               type="button"
-              className="btn btn-secondary"
               onClick={onTakeOverHost}
               style={{
                 width: '100%',
@@ -240,8 +423,12 @@ export const RoomExpiredModal: React.FC<RoomExpiredModalProps> = ({
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '0.5rem',
-                borderColor: 'rgba(234, 56, 62, 0.4)',
-                color: '#fff',
+                background: 'rgba(251, 191, 36, 0.12)',
+                border: '1px solid rgba(251, 191, 36, 0.45)',
+                borderRadius: 'var(--radius-md, 8px)',
+                color: '#fbbf24',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
               }}
             >
               <Crown size={17} color="#fbbf24" />
@@ -249,9 +436,9 @@ export const RoomExpiredModal: React.FC<RoomExpiredModalProps> = ({
             </button>
           )}
 
+          {/* Back to Home - Guaranteed high-contrast dark translucent style */}
           <button
             type="button"
-            className="btn btn-secondary"
             onClick={onReturnHome}
             style={{
               width: '100%',
@@ -262,16 +449,22 @@ export const RoomExpiredModal: React.FC<RoomExpiredModalProps> = ({
               alignItems: 'center',
               justifyContent: 'center',
               gap: '0.5rem',
+              background: 'rgba(255, 255, 255, 0.08)',
+              border: '1px solid rgba(255, 255, 255, 0.18)',
+              borderRadius: 'var(--radius-md, 8px)',
+              color: '#ffffff',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
             }}
           >
             <Home size={18} />
             Back to Home
           </button>
 
-          {onHostParty && !onTakeOverHost && (
+          {/* Host New Party (when applicable and not rejected) */}
+          {!isRejectedFromJoin && onHostParty && !onTakeOverHost && (
             <button
               type="button"
-              className="btn btn-secondary"
               onClick={onHostParty}
               style={{
                 width: '100%',
@@ -282,6 +475,11 @@ export const RoomExpiredModal: React.FC<RoomExpiredModalProps> = ({
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '0.5rem',
+                background: 'rgba(234, 56, 62, 0.12)',
+                border: '1px solid rgba(234, 56, 62, 0.4)',
+                borderRadius: 'var(--radius-md, 8px)',
+                color: '#ff6b6b',
+                cursor: 'pointer',
               }}
             >
               <PlusCircle size={17} />

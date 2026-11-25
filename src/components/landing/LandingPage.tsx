@@ -4,15 +4,17 @@ import {
   LogIn,
   Tv,
   Film,
-  Sparkles,
-  Zap,
+  Clapperboard,
+  Smile,
   ShieldCheck,
   ExternalLink,
   ChevronRight,
   Hash,
   User,
-  Clapperboard,
   Flame,
+  Users,
+  Lock,
+  Radio,
 } from 'lucide-react'
 import { subscribeToActivePartyStats, type LivePartyStats } from '@/services/firebaseService'
 
@@ -59,7 +61,7 @@ const FEATURED_TITLES: FeaturedTitle[] = [
     id: 'dune-2',
     title: 'Dune: Part Two',
     type: 'Movie',
-    tag: 'Sci-Fi • 4K',
+    tag: 'Movie • 4K',
     poster: 'https://image.tmdb.org/t/p/w500/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg',
     streamUrl: 'https://www.youtube.com/watch?v=Way9Dexny3w',
   },
@@ -67,7 +69,7 @@ const FEATURED_TITLES: FeaturedTitle[] = [
     id: 'stranger-things',
     title: 'Stranger Things',
     type: 'Series',
-    tag: 'Sci-Fi • Season 4',
+    tag: 'Series • Sci-Fi',
     poster: 'https://image.tmdb.org/t/p/w500/49WJfeN0moxb9IPfGn8AIqMGskD.jpg',
     streamUrl: 'https://www.youtube.com/watch?v=b9EkMc79ZSU',
   },
@@ -75,7 +77,7 @@ const FEATURED_TITLES: FeaturedTitle[] = [
     id: 'interstellar',
     title: 'Interstellar',
     type: 'Movie',
-    tag: 'Sci-Fi • Masterpiece',
+    tag: 'Movie • Sci-Fi',
     poster: 'https://image.tmdb.org/t/p/w500/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg',
     streamUrl: 'https://www.youtube.com/watch?v=zSWdZVtXT7E',
   },
@@ -83,7 +85,7 @@ const FEATURED_TITLES: FeaturedTitle[] = [
     id: 'arcane',
     title: 'Arcane',
     type: 'Series',
-    tag: 'Animation • Season 2',
+    tag: 'Series • Animation',
     poster: 'https://image.tmdb.org/t/p/w500/fqldf2t8ztc9aiwn3k6mlX3tvRT.jpg',
     streamUrl: 'https://www.youtube.com/watch?v=fXmAurh012s',
   },
@@ -91,7 +93,7 @@ const FEATURED_TITLES: FeaturedTitle[] = [
     id: 'oppenheimer',
     title: 'Oppenheimer',
     type: 'Movie',
-    tag: 'Drama • Oscar Winner',
+    tag: 'Movie • Drama',
     poster: 'https://image.tmdb.org/t/p/w500/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg',
     streamUrl: 'https://www.youtube.com/watch?v=uYPbbksJxIg',
   },
@@ -99,7 +101,7 @@ const FEATURED_TITLES: FeaturedTitle[] = [
     id: 'the-batman',
     title: 'The Batman',
     type: 'Movie',
-    tag: 'Action • Dark Knight',
+    tag: 'Movie • Action',
     poster: 'https://image.tmdb.org/t/p/w500/74xTEgt7R36Fpooo50r9T25onhq.jpg',
     streamUrl: 'https://www.youtube.com/watch?v=mqqft2x_Aa4',
   },
@@ -322,7 +324,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </>
             ) : (
               <>
-                <Sparkles size={14} color="#ea383e" />
+                <Clapperboard size={14} color="#ea383e" />
                 <span>Watch Movies & Series With Friends</span>
               </>
             )}
@@ -687,14 +689,22 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(135px, 1fr))',
-            gap: '1rem',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+            gap: '1.25rem',
           }}
         >
           {FEATURED_TITLES.map((item) => (
             <div
               key={item.id}
               className="cinema-card"
+              onClick={() => handleQuickStartParty(item)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  handleQuickStartParty(item)
+                }
+              }}
               style={{
                 background: 'rgba(21, 24, 34, 0.75)',
                 backdropFilter: 'blur(12px)',
@@ -703,8 +713,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 overflow: 'hidden',
                 display: 'flex',
                 flexDirection: 'column',
+                position: 'relative',
               }}
             >
+              {/* Poster with Play Hover Overlay */}
               <div style={{ position: 'relative', aspectRatio: '2/3', overflow: 'hidden' }}>
                 <img
                   src={item.poster}
@@ -725,55 +737,79 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     backdropFilter: 'blur(6px)',
                     color: '#fff',
                     border: '1px solid rgba(255, 255, 255, 0.15)',
+                    zIndex: 2,
                   }}
                 >
                   {item.tag}
                 </span>
-              </div>
 
-              <div style={{ padding: '0.85rem', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between', gap: '0.75rem' }}>
-                <div>
-                  <h4
-                    style={{
-                      fontSize: '0.9rem',
-                      fontWeight: 700,
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                    }}
-                  >
-                    {item.title}
-                  </h4>
-                  <span style={{ fontSize: '0.725rem', color: 'var(--text-dim)' }}>{item.type}</span>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => handleQuickStartParty(item)}
-                  className="btn-action"
+                {/* Netflix-style Hover Play Overlay */}
+                <div
+                  className="cinema-play-overlay"
                   style={{
-                    width: '100%',
-                    padding: '0.45rem',
-                    fontSize: '0.75rem',
+                    position: 'absolute',
+                    inset: 0,
+                    background: 'linear-gradient(to top, rgba(10, 12, 18, 0.95) 0%, rgba(10, 12, 18, 0.45) 55%, rgba(10, 12, 18, 0.25) 100%)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
                     justifyContent: 'center',
-                    background: 'rgba(234, 56, 62, 0.15)',
-                    borderColor: 'rgba(234, 56, 62, 0.35)',
-                    color: '#fca5a5',
+                    gap: '0.5rem',
+                    zIndex: 3,
                   }}
                 >
-                  <Clapperboard size={13} color="#ea383e" />
-                  <span>Start Party</span>
-                </button>
+                  <div
+                    style={{
+                      width: '46px',
+                      height: '46px',
+                      borderRadius: '50%',
+                      background: 'var(--primary-red, #ea383e)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: '0 4px 18px rgba(234, 56, 62, 0.65)',
+                    }}
+                  >
+                    <Play size={20} color="#fff" fill="#fff" style={{ marginLeft: '2px' }} />
+                  </div>
+                  <span
+                    style={{
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      color: '#ffffff',
+                      letterSpacing: '0.02em',
+                    }}
+                  >
+                    Start Party
+                  </span>
+                </div>
+              </div>
+
+              {/* Title & Type */}
+              <div style={{ padding: '0.75rem 0.85rem', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                <h4
+                  style={{
+                    fontSize: '0.88rem',
+                    fontWeight: 700,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    color: 'var(--text-main)',
+                  }}
+                >
+                  {item.title}
+                </h4>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>{item.tag}</span>
               </div>
             </div>
           ))}
         </div>
       </section>
 
-      {/* Feature Showcase Grid */}
+      {/* How It Works & Formats Section */}
       <section
         style={{
-          padding: '3rem 1.5rem',
+          padding: '3.5rem 1.5rem',
           maxWidth: '1240px',
           margin: '0 auto',
           width: '100%',
@@ -784,153 +820,181 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
           <h2
             style={{
-              fontSize: '1.85rem',
+              fontSize: '1.75rem',
               fontWeight: 800,
               fontFamily: 'var(--font-display)',
-              marginBottom: '0.5rem',
+              marginBottom: '0.45rem',
             }}
           >
-            Built for Movie Nights
+            How Watch Party Works
           </h2>
           <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-            Synchronized playback, crystal-clear controls, zero distractions.
+            No accounts or downloads required. Start a room and watch together in seconds.
           </p>
         </div>
 
+        {/* 3 Practical Steps */}
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
             gap: '1.5rem',
           }}
         >
-          {/* Card 1 */}
+          {/* Step 1 */}
           <div
             style={{
-              background: 'rgba(21, 24, 34, 0.75)',
+              background: 'rgba(21, 24, 34, 0.65)',
               backdropFilter: 'blur(12px)',
               borderRadius: 'var(--radius-lg)',
               border: '1px solid rgba(255, 255, 255, 0.08)',
-              padding: '1.5rem',
+              padding: '1.75rem',
               display: 'flex',
               flexDirection: 'column',
-              gap: '0.75rem',
+              gap: '0.85rem',
+              position: 'relative',
             }}
           >
-            <div
-              style={{
-                width: '42px',
-                height: '42px',
-                borderRadius: 'var(--radius-md)',
-                background: 'rgba(139, 92, 246, 0.18)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Zap size={20} color="var(--accent-purple)" />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'rgba(234, 56, 62, 0.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Play size={18} color="#ea383e" fill="#ea383e" />
+              </div>
+              <span style={{ fontSize: '1.5rem', fontWeight: 900, color: 'rgba(255, 255, 255, 0.12)', fontFamily: 'var(--font-display)' }}>
+                01
+              </span>
             </div>
-            <h4 style={{ fontSize: '1.05rem', fontWeight: 700 }}>Frame-Accurate Sync</h4>
-            <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-              Play, pause, and seek stay aligned across every screen using direct peer connections. No buffering drift.
+            <h4 style={{ fontSize: '1.05rem', fontWeight: 700 }}>Choose or paste any video</h4>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.55 }}>
+              Pick from featured titles above, paste a YouTube link or live IPTV feed, or load a local video file from your device.
             </p>
           </div>
 
-          {/* Card 2 */}
+          {/* Step 2 */}
           <div
             style={{
-              background: 'rgba(21, 24, 34, 0.75)',
+              background: 'rgba(21, 24, 34, 0.65)',
               backdropFilter: 'blur(12px)',
               borderRadius: 'var(--radius-lg)',
               border: '1px solid rgba(255, 255, 255, 0.08)',
-              padding: '1.5rem',
+              padding: '1.75rem',
               display: 'flex',
               flexDirection: 'column',
-              gap: '0.75rem',
+              gap: '0.85rem',
+              position: 'relative',
             }}
           >
-            <div
-              style={{
-                width: '42px',
-                height: '42px',
-                borderRadius: 'var(--radius-md)',
-                background: 'rgba(236, 72, 153, 0.18)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Film size={20} color="var(--accent-pink)" />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'rgba(139, 92, 246, 0.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Users size={18} color="var(--accent-purple)" />
+              </div>
+              <span style={{ fontSize: '1.5rem', fontWeight: 900, color: 'rgba(255, 255, 255, 0.12)', fontFamily: 'var(--font-display)' }}>
+                02
+              </span>
             </div>
-            <h4 style={{ fontSize: '1.05rem', fontWeight: 700 }}>Universal Media Engine</h4>
-            <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-              Stream YouTube videos, live HLS feeds, direct MP4 links, or local video files from your device without uploading.
+            <h4 style={{ fontSize: '1.05rem', fontWeight: 700 }}>Send your invite link</h4>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.55 }}>
+              Share your room URL with friends. Lock the room anytime with one click once everyone joins (supports up to 15 viewers).
             </p>
           </div>
 
-          {/* Card 3 */}
+          {/* Step 3 */}
           <div
             style={{
-              background: 'rgba(21, 24, 34, 0.75)',
+              background: 'rgba(21, 24, 34, 0.65)',
               backdropFilter: 'blur(12px)',
               borderRadius: 'var(--radius-lg)',
               border: '1px solid rgba(255, 255, 255, 0.08)',
-              padding: '1.5rem',
+              padding: '1.75rem',
               display: 'flex',
               flexDirection: 'column',
-              gap: '0.75rem',
+              gap: '0.85rem',
+              position: 'relative',
             }}
           >
-            <div
-              style={{
-                width: '42px',
-                height: '42px',
-                borderRadius: 'var(--radius-md)',
-                background: 'rgba(16, 185, 129, 0.18)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Tv size={20} color="var(--success)" />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'rgba(251, 191, 36, 0.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Smile size={18} color="#fbbf24" />
+              </div>
+              <span style={{ fontSize: '1.5rem', fontWeight: 900, color: 'rgba(255, 255, 255, 0.12)', fontFamily: 'var(--font-display)' }}>
+                03
+              </span>
             </div>
-            <h4 style={{ fontSize: '1.05rem', fontWeight: 700 }}>Distraction-Free Theater</h4>
-            <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-              Clean fullscreen player with auto-hiding controls and a one-click theater mode so you focus on the story.
+            <h4 style={{ fontSize: '1.05rem', fontWeight: 700 }}>Watch and react together</h4>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.55 }}>
+              Playback stays in sync automatically. Send 30s voice notes, share images, and drop live reactions without buffering drift.
             </p>
           </div>
+        </div>
 
-          {/* Card 4 */}
-          <div
-            style={{
-              background: 'rgba(21, 24, 34, 0.75)',
-              backdropFilter: 'blur(12px)',
-              borderRadius: 'var(--radius-lg)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              padding: '1.5rem',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.75rem',
-            }}
-          >
-            <div
-              style={{
-                width: '42px',
-                height: '42px',
-                borderRadius: 'var(--radius-md)',
-                background: 'rgba(59, 130, 246, 0.18)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <ShieldCheck size={20} color="#60a5fa" />
-            </div>
-            <h4 style={{ fontSize: '1.05rem', fontWeight: 700 }}>Private by Design</h4>
-            <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-              Rooms run directly between you and your friends with zero tracking, no accounts, and no data stored on servers.
-            </p>
-          </div>
+        {/* Supported Media & Privacy Pills Bar */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexWrap: 'wrap',
+            gap: '0.65rem',
+            marginTop: '2.5rem',
+          }}
+        >
+          <span className="format-pill">
+            <Radio size={14} color="#ea383e" />
+            <span>Live IPTV & HLS</span>
+          </span>
+          <span className="format-pill">
+            <Play size={14} color="#ea383e" />
+            <span>YouTube Sync</span>
+          </span>
+          <span className="format-pill">
+            <Film size={14} color="#a78bfa" />
+            <span>MP4 & WebM</span>
+          </span>
+          <span className="format-pill">
+            <span>🎙️</span>
+            <span>30s Voice Notes</span>
+          </span>
+          <span className="format-pill">
+            <Lock size={13} color="#fbbf24" />
+            <span>1-Tap Room Lock</span>
+          </span>
+          <span className="format-pill">
+            <Users size={14} color="#34d399" />
+            <span>Up to 15 Viewers</span>
+          </span>
+          <span className="format-pill">
+            <ShieldCheck size={14} color="#60a5fa" />
+            <span>No Accounts Needed</span>
+          </span>
         </div>
       </section>
 

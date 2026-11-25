@@ -111,6 +111,8 @@ export async function registerPartyRoom(
     hostName: string
     isP2P?: boolean
     streamUrl?: string
+    maxCapacity?: number
+    isLocked?: boolean
   }
 ): Promise<void> {
   const { firestore } = getFirebase()
@@ -125,6 +127,8 @@ export async function registerPartyRoom(
         title: data.title || 'Live Watch Party',
         hostName: data.hostName || 'Host',
         isP2P: Boolean(data.isP2P),
+        maxCapacity: data.maxCapacity || 10,
+        isLocked: Boolean(data.isLocked),
         participantCount: 1,
         status: 'active',
         createdAt: serverTimestamp(),
@@ -190,6 +194,10 @@ export async function checkPartyRoomStatus(roomId: string): Promise<{
   exists: boolean
   isActive: boolean
   title?: string
+  isLocked?: boolean
+  isFull?: boolean
+  maxCapacity?: number
+  participantCount?: number
 }> {
   const { firestore } = getFirebase()
   if (!firestore || !roomId) {
@@ -209,11 +217,19 @@ export async function checkPartyRoomStatus(roomId: string): Promise<{
       data.lastActiveAt?.toMillis?.() || data.createdAt?.toMillis?.() || 0
     const isStale = now - lastActive > STALE_ROOM_THRESHOLD_MS
     const isActive = data.status === 'active' && !isStale
+    const maxCapacity = (data.maxCapacity as number) || 10
+    const participantCount = (data.participantCount as number) || 1
+    const isLocked = Boolean(data.isLocked)
+    const isFull = participantCount >= maxCapacity
 
     return {
       exists: true,
       isActive,
       title: (data.title as string) || undefined,
+      isLocked,
+      isFull,
+      maxCapacity,
+      participantCount,
     }
   } catch {
     // On read error, default to true so P2P attempt can continue
