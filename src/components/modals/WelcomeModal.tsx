@@ -1,5 +1,7 @@
 import React, { useState } from 'react'
 import { Play, LogIn, User, Hash } from 'lucide-react'
+import { useRoomIdEligibility } from '@/hooks/useRoomIdEligibility'
+import { sanitizeRoomIdInput } from '@/utils/roomValidation'
 
 interface WelcomeModalProps {
   isOpen: boolean
@@ -34,6 +36,7 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({
   const [customRoomId, setCustomRoomId] = useState<string>('')
   const [isPermanent, setIsPermanent] = useState<boolean>(false)
   const [showAdvancedHost, setShowAdvancedHost] = useState<boolean>(false)
+  const slugEligibility = useRoomIdEligibility(customRoomId)
 
   const streamUrl = initialStreamParam || 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8'
   const streamTitle = partyTitle || initialTitleParam || 'Live Watch Party'
@@ -41,8 +44,9 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({
   if (!isOpen) return null
 
   const handleStartHosting = () => {
+    if (slugEligibility.status === 'invalid' || slugEligibility.status === 'checking') return
     onSaveName(name.trim() || userName)
-    const sanitizedSlug = customRoomId.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '')
+    const sanitizedSlug = sanitizeRoomIdInput(customRoomId.trim())
     onHostParty(streamUrl, streamTitle, sanitizedSlug || undefined, undefined, isPermanent)
   }
 
@@ -215,19 +219,42 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({
                       type="text"
                       value={customRoomId}
                       maxLength={24}
-                      onChange={(e) => setCustomRoomId(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
+                      onChange={(e) => setCustomRoomId(sanitizeRoomIdInput(e.target.value))}
                       placeholder="e.g. shakil-cinema"
                       style={{
                         width: '100%',
                         padding: '0.45rem 0.6rem',
                         borderRadius: 'var(--radius-sm)',
                         background: 'var(--bg-surface)',
-                        border: '1px solid var(--border-subtle)',
+                        border:
+                          slugEligibility.status === 'invalid'
+                            ? '1px solid #ef4444'
+                            : slugEligibility.status === 'eligible'
+                            ? '1px solid #22c55e'
+                            : '1px solid var(--border-subtle)',
                         color: 'var(--text-main)',
                         fontSize: '0.8rem',
                         outline: 'none',
                       }}
                     />
+                    {slugEligibility.status !== 'idle' && (
+                      <div
+                        style={{
+                          fontSize: '0.7rem',
+                          marginTop: '0.25rem',
+                          fontWeight: 600,
+                          color:
+                            slugEligibility.status === 'eligible'
+                              ? '#4ade80'
+                              : slugEligibility.status === 'invalid'
+                              ? '#f87171'
+                              : 'var(--text-dim)',
+                        }}
+                      >
+                        {slugEligibility.status === 'eligible' ? '✓ ' : ''}
+                        {slugEligibility.message}
+                      </div>
+                    )}
                     <label
                       style={{
                         display: 'flex',
@@ -269,8 +296,16 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({
               </div>
               <button
                 onClick={handleStartHosting}
+                disabled={slugEligibility.status === 'invalid' || slugEligibility.status === 'checking'}
                 className="btn-action btn-primary"
-                style={{ width: '100%', justifyContent: 'center' }}
+                style={{
+                  width: '100%',
+                  justifyContent: 'center',
+                  opacity:
+                    slugEligibility.status === 'invalid' || slugEligibility.status === 'checking'
+                      ? 0.5
+                      : 1,
+                }}
               >
                 <Play size={16} fill="#fff" />
                 <span>Create Room</span>

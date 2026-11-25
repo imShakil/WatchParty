@@ -17,6 +17,8 @@ import {
   Radio,
 } from 'lucide-react'
 import { subscribeToActivePartyStats, type LivePartyStats } from '@/services/firebaseService'
+import { useRoomIdEligibility } from '@/hooks/useRoomIdEligibility'
+import { sanitizeRoomIdInput } from '@/utils/roomValidation'
 
 interface LandingPageProps {
   userName: string
@@ -126,6 +128,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const [isPermanent, setIsPermanent] = useState<boolean>(false)
   const [showAdvancedSlug, setShowAdvancedSlug] = useState<boolean>(false)
   const [liveStats, setLiveStats] = useState<LivePartyStats>({ activeRooms: 0, activeViewers: 0 })
+  const slugEligibility = useRoomIdEligibility(customSlug)
 
   useEffect(() => {
     const unsub = subscribeToActivePartyStats((stats) => {
@@ -136,8 +139,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
   const handleHost = (e: React.FormEvent) => {
     e.preventDefault()
+    if (slugEligibility.status === 'invalid' || slugEligibility.status === 'checking') return
     onSaveName(name.trim() || userName)
-    const sanitizedSlug = customSlug.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '')
+    const sanitizedSlug = sanitizeRoomIdInput(customSlug.trim())
     onHostParty(
       undefined,
       partyName.trim() || 'My Watch Party',
@@ -502,20 +506,43 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                         type="text"
                         value={customSlug}
                         maxLength={24}
-                        onChange={(e) => setCustomSlug(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
+                        onChange={(e) => setCustomSlug(sanitizeRoomIdInput(e.target.value))}
                         placeholder="e.g. movie-night"
                         style={{
                           width: '100%',
                           padding: '0.65rem 0.85rem',
                           borderRadius: 'var(--radius-md)',
                           background: 'rgba(10, 12, 18, 0.85)',
-                          border: '1px solid rgba(255, 255, 255, 0.12)',
+                          border:
+                            slugEligibility.status === 'invalid'
+                              ? '1px solid #ef4444'
+                              : slugEligibility.status === 'eligible'
+                              ? '1px solid #22c55e'
+                              : '1px solid rgba(255, 255, 255, 0.12)',
                           color: 'var(--text-main)',
                           fontSize: '0.85rem',
                           outline: 'none',
                           marginTop: '0.25rem',
                         }}
                       />
+                      {slugEligibility.status !== 'idle' && (
+                        <div
+                          style={{
+                            fontSize: '0.72rem',
+                            marginTop: '0.3rem',
+                            fontWeight: 600,
+                            color:
+                              slugEligibility.status === 'eligible'
+                                ? '#4ade80'
+                                : slugEligibility.status === 'invalid'
+                                ? '#f87171'
+                                : 'var(--text-muted)',
+                          }}
+                        >
+                          {slugEligibility.status === 'eligible' ? '✓ ' : ''}
+                          {slugEligibility.message}
+                        </div>
+                      )}
                       <label
                         style={{
                           display: 'flex',
@@ -560,8 +587,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
               <button
                 type="submit"
+                disabled={slugEligibility.status === 'invalid' || slugEligibility.status === 'checking'}
                 className="btn-action btn-primary"
-                style={{ width: '100%', justifyContent: 'center', padding: '0.85rem', fontSize: '0.95rem' }}
+                style={{
+                  width: '100%',
+                  justifyContent: 'center',
+                  padding: '0.85rem',
+                  fontSize: '0.95rem',
+                  opacity:
+                    slugEligibility.status === 'invalid' || slugEligibility.status === 'checking'
+                      ? 0.5
+                      : 1,
+                }}
               >
                 <Play size={16} fill="#fff" />
                 <span>Create Watch Room</span>

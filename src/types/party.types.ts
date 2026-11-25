@@ -72,6 +72,7 @@ export interface RoomMetadata {
   roomId: string
   roomTitle: string
   streamUrl: string
+  sourceType?: string
   posterUrl?: string
   isHostOnlyControl: boolean
   hostId: string

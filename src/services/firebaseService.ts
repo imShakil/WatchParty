@@ -7,6 +7,7 @@ import {
   getDocs,
   setDoc,
   updateDoc,
+  deleteDoc,
   collection,
   query,
   where,
@@ -98,6 +99,90 @@ export function logPartyEvent(eventName: string, params?: Record<string, unknown
         }
       })
       .catch(() => {})
+  }
+}
+
+/**
+ * Consume an ephemeral launch token created by the DekhoPrime main app,
+ * returning its hidden stream metadata and deleting the token immediately.
+ */
+export async function consumeLaunchToken(tokenId: string): Promise<{
+  streamUrl?: string
+  sourceType?: string
+  title?: string
+  poster?: string
+} | null> {
+  const { firestore } = getFirebase()
+  if (!firestore || !tokenId) return null
+
+  try {
+    const tokenRef = doc(firestore, 'party_launch_tokens', tokenId)
+    const snap = await getDoc(tokenRef)
+    if (!snap.exists()) return null
+
+    const data = snap.data()
+    void deleteDoc(tokenRef).catch(() => {})
+
+    return {
+      streamUrl: (data.streamUrl as string) || undefined,
+      sourceType: (data.sourceType as string) || undefined,
+      title: (data.title as string) || undefined,
+      poster: (data.poster as string) || undefined,
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Check whether a custom Room ID is eligible and available (not active or reserved by another host).
+ */
+export async function checkRoomIdEligibility(
+  roomId: string,
+  hasLocalHostOwnership: boolean,
+  allowOwnedActive = false
+): Promise<{ eligible: boolean; reason?: string; isOwnedPermanent?: boolean }> {
+  const { firestore } = getFirebase()
+  if (!firestore || !roomId) {
+    return { eligible: true }
+  }
+
+  try {
+    const roomRef = doc(firestore, 'party_rooms', roomId)
+    const snap = await getDoc(roomRef)
+    if (!snap.exists()) {
+      return { eligible: true }
+    }
+
+    const data = snap.data()
+    const now = Date.now()
+    const lastActive =
+      data.lastActiveAt?.toMillis?.() || data.createdAt?.toMillis?.() || 0
+    const isStale = now - lastActive > STALE_ROOM_THRESHOLD_MS
+    const isActive = data.status === 'active' && !isStale
+    const isPermanent = Boolean(data.isPermanent)
+
+    if (isActive && !(allowOwnedActive && hasLocalHostOwnership)) {
+      return {
+        eligible: false,
+        reason: 'Room ID is currently in use by an active party.',
+      }
+    }
+
+    if (isPermanent && !hasLocalHostOwnership) {
+      return {
+        eligible: false,
+        reason: 'This permanent Room ID is reserved by another host.',
+      }
+    }
+
+    if (isPermanent && hasLocalHostOwnership) {
+      return { eligible: true, isOwnedPermanent: true }
+    }
+
+    return { eligible: true }
+  } catch {
+    return { eligible: true }
   }
 }
 

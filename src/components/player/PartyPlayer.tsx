@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import Hls from 'hls.js'
-import { parseMediaUrl } from '@/utils/mediaUrl'
+import { parseMediaUrl, withStartAtParam } from '@/utils/mediaUrl'
 import { YouTubePlayer } from '@/components/player/YouTubePlayer'
 import type { UnifiedPlayerRef } from '@/types/player.types'
 import {
@@ -16,16 +16,28 @@ import {
   Lock,
   Radio,
   Wifi,
+  MonitorUp,
+  Square,
+  RefreshCw,
 } from 'lucide-react'
 
 interface PartyPlayerProps {
   streamUrl: string
+  sourceType?: string
   posterUrl?: string
   isHost: boolean
   isHostOnlyControl: boolean
   isP2PStream?: boolean
   remoteStream?: MediaStream | null
+  embedStartAt?: number
+  embedSyncNonce?: number
+  embedClockTime?: number
+  embedClockRunning?: boolean
+  hostSyncTime?: number
   onBroadcastLocalStream?: (stream: MediaStream) => void
+  onStopTabShare?: () => void
+  onSyncEmbedToHost?: () => void
+  onEmbedPlayerEvent?: (currentTime: number, eventName?: string) => void
   videoRef: React.RefObject<HTMLVideoElement | null>
   controllerRef?: React.MutableRefObject<UnifiedPlayerRef | null>
   onPlay: () => void
@@ -47,12 +59,21 @@ function formatTime(seconds: number): string {
 
 export const PartyPlayer: React.FC<PartyPlayerProps> = ({
   streamUrl,
+  sourceType,
   posterUrl,
   isHost,
   isHostOnlyControl,
   isP2PStream,
   remoteStream,
+  embedStartAt = 0,
+  embedSyncNonce = 0,
+  embedClockTime = 0,
+  embedClockRunning = true,
+  hostSyncTime = 0,
   onBroadcastLocalStream,
+  onStopTabShare,
+  onSyncEmbedToHost,
+  onEmbedPlayerEvent,
   videoRef,
   controllerRef,
   onPlay,
@@ -72,6 +93,9 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
   const [showControls, setShowControls] = useState<boolean>(true)
   const hideControlsTimer = useRef<number | null>(null)
   const guestVideoRef = useRef<HTMLVideoElement | null>(null)
+  const embedIframeRef = useRef<HTMLIFrameElement | null>(null)
+  const [guestEmbedTime, setGuestEmbedTime] = useState<number>(0)
+  const lastAutoSeekRef = useRef<number>(0)
 
   useEffect(() => {
     if (guestVideoRef.current && remoteStream) {
@@ -80,8 +104,86 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
     }
   }, [remoteStream])
 
-  const parsedMedia = useMemo(() => parseMediaUrl(streamUrl), [streamUrl])
+  const parsedMedia = useMemo(
+    () => parseMediaUrl(streamUrl, undefined, sourceType),
+    [streamUrl, sourceType]
+  )
   const { normalizedUrl, isEmbed, isYouTube, youtubeId } = parsedMedia
+  const isTabShareHost = isHost && isP2PStream && streamUrl.startsWith('p2p://tab-share')
+
+  // Listen for postMessage player telemetry from vidnest.fun, vidlink.pro, vsembed.ru / vidsrc
+  useEffect(() => {
+    if (!isEmbed) return
+
+    const handleMessage = (event: MessageEvent) => {
+      let raw: unknown = event.data
+      if (typeof raw === 'string') {
+        try {
+          raw = JSON.parse(raw)
+        } catch {
+          return
+        }
+      }
+      if (!raw || typeof raw !== 'object') return
+      const payload = raw as Record<string, unknown>
+
+      let parsedTime = Number.NaN
+      let parsedEvent: string | undefined
+
+      // 1. VidLink / VsEmbed / VidSrc format: { type: 'PLAYER_EVENT', data: { event, currentTime } }
+      if (payload.type === 'PLAYER_EVENT' && payload.data && typeof payload.data === 'object') {
+        const d = payload.data as Record<string, unknown>
+        parsedTime = Number(d.currentTime)
+        parsedEvent = typeof d.event === 'string' ? d.event : undefined
+      } else if (payload.source === 'vidnest-player') {
+        // 2. VidNest format: { source: 'vidnest-player', ... }
+        const nested =
+          payload.data && typeof payload.data === 'object'
+            ? (payload.data as Record<string, unknown>)
+            : payload
+        parsedTime = Number(
+          nested.currentTime ?? nested.time ?? payload.currentTime ?? payload.time
+        )
+        parsedEvent =
+          typeof (nested.event ?? payload.event ?? payload.type ?? payload.status) === 'string'
+            ? String(nested.event ?? payload.event ?? payload.type ?? payload.status)
+            : undefined
+      }
+
+      if (Number.isNaN(parsedTime) || parsedTime < 0) return
+
+      if (isHost) {
+        onEmbedPlayerEvent?.(parsedTime, parsedEvent)
+      } else {
+        setGuestEmbedTime(parsedTime)
+      }
+    }
+
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [isEmbed, isHost, onEmbedPlayerEvent])
+
+  // Auto-seek vidnest.fun guest player smoothly when drift > 4.5s during active playback
+  useEffect(() => {
+    if (
+      !isEmbed ||
+      isHost ||
+      !normalizedUrl.includes('vidnest') ||
+      guestEmbedTime <= 0 ||
+      hostSyncTime <= 0
+    ) {
+      return
+    }
+    const drift = Math.abs(guestEmbedTime - hostSyncTime)
+    const now = Date.now()
+    if (drift > 4.5 && now - lastAutoSeekRef.current > 4000) {
+      lastAutoSeekRef.current = now
+      embedIframeRef.current?.contentWindow?.postMessage(
+        { action: 'seek', time: Math.floor(hostSyncTime) },
+        '*'
+      )
+    }
+  }, [isEmbed, isHost, normalizedUrl, guestEmbedTime, hostSyncTime])
 
   const canControl = !isHostOnlyControl || isHost
 
@@ -348,6 +450,67 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
             onTimeUpdate={handleYouTubeTimeUpdate}
           />
         </div>
+      ) : isTabShareHost ? (
+        <div
+          style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '1rem',
+            background: '#08090c',
+            padding: '2rem',
+            textAlign: 'center',
+          }}
+        >
+          <div
+            style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: '50%',
+              background: 'rgba(139, 92, 246, 0.16)',
+              border: '1px solid rgba(139, 92, 246, 0.4)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <MonitorUp size={28} color="#c084fc" />
+          </div>
+          <div>
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '0.35rem', color: '#fff' }}>
+              Streaming Browser Tab Live
+            </h3>
+            <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)', maxWidth: '420px', lineHeight: 1.5 }}>
+              Your selected browser tab & audio are being broadcast directly to all friends in real-time sync. Keep the movie playing in that tab.
+            </p>
+            {onStopTabShare && (
+              <button
+                type="button"
+                onClick={onStopTabShare}
+                style={{
+                  marginTop: '1rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.45rem',
+                  padding: '0.55rem 1rem',
+                  borderRadius: '8px',
+                  background: 'rgba(239, 68, 68, 0.16)',
+                  border: '1px solid rgba(239, 68, 68, 0.45)',
+                  color: '#f87171',
+                  fontSize: '0.82rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                <Square size={13} fill="currentColor" />
+                <span>Stop Sharing Tab</span>
+              </button>
+            )}
+          </div>
+        </div>
       ) : isP2PStream && !isHost ? (
         <div style={{ width: '100%', height: '100%', position: 'relative' }}>
           {remoteStream ? (
@@ -398,13 +561,131 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
           )}
         </div>
       ) : isEmbed ? (
-        <iframe
-          src={normalizedUrl}
-          title={isYouTube ? 'YouTube Party Stream' : 'Party Embed Stream'}
-          style={{ width: '100%', height: '100%', border: 'none' }}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-          allowFullScreen
-        />
+        (() => {
+          const iframeSrc =
+            embedStartAt > 0 ? withStartAtParam(normalizedUrl, embedStartAt) : normalizedUrl
+          return (
+            <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+              <iframe
+                ref={embedIframeRef}
+                key={`${iframeSrc}-${embedSyncNonce}`}
+                src={iframeSrc}
+                title={isYouTube ? 'YouTube Party Stream' : 'Party Embed Stream'}
+                referrerPolicy="origin"
+                style={{ width: '100%', height: '100%', border: 'none' }}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
+                allowFullScreen
+              />
+              {/* Embed ?startAt= Sync Overlay */}
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '0.75rem',
+                  right: '0.75rem',
+                  zIndex: 25,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  padding: '0.3rem 0.55rem',
+                  borderRadius: '999px',
+                  background: 'rgba(10, 12, 18, 0.85)',
+                  backdropFilter: 'blur(8px)',
+                  border: '1px solid rgba(255, 255, 255, 0.16)',
+                  boxShadow: '0 4px 14px rgba(0, 0, 0, 0.45)',
+                }}
+              >
+                {isHost ? (
+                  <div
+                    title="Live timestamp broadcast to guests"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      padding: '0.15rem 0.35rem',
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: '7px',
+                        height: '7px',
+                        borderRadius: '50%',
+                        background: embedClockRunning ? '#4ade80' : '#fbbf24',
+                        boxShadow: embedClockRunning ? '0 0 8px #4ade80' : 'none',
+                      }}
+                    />
+                    <span
+                      style={{
+                        fontSize: '0.72rem',
+                        fontWeight: 600,
+                        color: embedClockRunning ? '#cbd5e1' : '#fbbf24',
+                      }}
+                    >
+                      {embedClockRunning ? 'Live Sync' : 'Paused'}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        color: '#fff',
+                        fontFamily: 'monospace',
+                      }}
+                    >
+                      {formatTime(embedClockTime)}
+                    </span>
+                  </div>
+                ) : (
+                  (() => {
+                    const isSynced =
+                      guestEmbedTime > 0 && Math.abs(guestEmbedTime - hostSyncTime) <= 3.5
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const targetSec = Math.max(1, Math.floor(hostSyncTime))
+                          if (
+                            normalizedUrl.includes('vidnest') &&
+                            guestEmbedTime > 0 &&
+                            embedIframeRef.current?.contentWindow
+                          ) {
+                            embedIframeRef.current.contentWindow.postMessage(
+                              { action: 'seek', time: targetSec },
+                              '*'
+                            )
+                          } else {
+                            onSyncEmbedToHost?.()
+                          }
+                        }}
+                        title="Jump to Host's current movie time"
+                        style={{
+                          background: isSynced
+                            ? 'rgba(34, 197, 94, 0.2)'
+                            : 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
+                          border: isSynced ? '1px solid rgba(74, 222, 128, 0.45)' : 'none',
+                          borderRadius: '999px',
+                          color: isSynced ? '#4ade80' : '#fff',
+                          fontSize: '0.74rem',
+                          fontWeight: 700,
+                          padding: '0.28rem 0.7rem',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                        }}
+                      >
+                        <RefreshCw size={12} />
+                        <span>
+                          {isSynced
+                            ? `Synced (${formatTime(hostSyncTime)})`
+                            : `Sync (${formatTime(hostSyncTime)})`}
+                        </span>
+                      </button>
+                    )
+                  })()
+                )}
+              </div>
+            </div>
+          )
+        })()
       ) : (
         <>
           {/* Main Video Element */}

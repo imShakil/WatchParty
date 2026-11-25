@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useWatchParty } from '@/hooks/useWatchParty'
 import { PartyHeader } from '@/components/header/PartyHeader'
 import { PartyPlayer } from '@/components/player/PartyPlayer'
@@ -11,9 +11,9 @@ import { WelcomeModal } from '@/components/modals/WelcomeModal'
 import { ConfirmModal } from '@/components/modals/ConfirmModal'
 import { RoomExpiredModal } from '@/components/modals/RoomExpiredModal'
 import { LandingPage } from '@/components/landing/LandingPage'
-import { parseCurrentRoute, syncRoomUrl } from '@/utils/routeUtils'
+import { parseCurrentRoute, syncRoomUrl, cleanSensitiveUrlParams } from '@/utils/routeUtils'
 import { getHostSession } from '@/utils/sessionUtils'
-import { checkPartyRoomStatus } from '@/services/firebaseService'
+import { checkPartyRoomStatus, consumeLaunchToken } from '@/services/firebaseService'
 
 export function App() {
   const {
@@ -49,6 +49,14 @@ export function App() {
     bufferingPeerName,
     remoteStream,
     broadcastLocalStream,
+    stopLocalStream,
+    embedClockTime,
+    embedClockRunning,
+    hostSyncTime,
+    embedStartAt,
+    embedSyncNonce,
+    syncEmbedToHost,
+    handleEmbedPlayerEvent,
     videoRef,
     playerControllerRef,
     triggerReaction,
@@ -72,9 +80,27 @@ export function App() {
   const [isConfirmExitOpen, setIsConfirmExitOpen] = useState<boolean>(false)
   // URL and Path Route parsing (/room/:id, /room/new, or landing)
   const [initialRoute] = useState(() => parseCurrentRoute())
+  const [launchMeta, setLaunchMeta] = useState<{
+    streamUrl?: string
+    sourceType?: string
+    title?: string
+    poster?: string
+  } | null>(null)
   const urlRoom = initialRoute.roomId
-  const urlStream = initialRoute.streamUrl
-  const urlTitle = initialRoute.title
+  const urlStream = launchMeta?.streamUrl || initialRoute.streamUrl
+  const urlSourceType = launchMeta?.sourceType || initialRoute.sourceType
+  const urlTitle = launchMeta?.title || initialRoute.title
+  const urlPoster = launchMeta?.poster || initialRoute.poster
+
+  useEffect(() => {
+    cleanSensitiveUrlParams()
+    if (!initialRoute.launchToken) return
+    void consumeLaunchToken(initialRoute.launchToken).then((resolved) => {
+      if (resolved) {
+        setLaunchMeta(resolved)
+      }
+    })
+  }, [initialRoute.launchToken])
 
   const [isWelcomeOpen, setIsWelcomeOpen] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true
@@ -129,15 +155,34 @@ export function App() {
     const defaultStream =
       urlStream || streamUrl || 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8'
     const defaultTitle = urlTitle || title || 'DekhoPrime Watch Party'
-    const defaultPoster = posterUrl || undefined
+    const defaultPoster = urlPoster || posterUrl || undefined
 
     startHost(customRoomId, {
       streamUrl: defaultStream,
+      sourceType: urlSourceType || undefined,
       roomTitle: defaultTitle,
       posterUrl: defaultPoster,
       isPermanent: permanentFlag,
     })
     setIsWelcomeOpen(false)
+  }
+
+  const preTabShareMetaRef = useRef<{ url: string; title: string } | null>(null)
+  const activeTabStreamRef = useRef<MediaStream | null>(null)
+
+  const handleStopTabShare = () => {
+    if (activeTabStreamRef.current) {
+      for (const track of activeTabStreamRef.current.getTracks()) {
+        track.stop()
+      }
+      activeTabStreamRef.current = null
+    }
+    stopLocalStream()
+    const prev = preTabShareMetaRef.current
+    if (prev && prev.url && !prev.url.startsWith('p2p://')) {
+      changeStream(prev.url, prev.title, undefined, false)
+    }
+    preTabShareMetaRef.current = null
   }
 
   const handleJoinParty = (targetRoomId: string) => {
@@ -190,12 +235,21 @@ export function App() {
         <div className="player-wrapper">
           <PartyPlayer
             streamUrl={roomMetadata.streamUrl}
+            sourceType={roomMetadata.sourceType}
             posterUrl={roomMetadata.posterUrl}
             isHost={isHost}
             isHostOnlyControl={roomMetadata.isHostOnlyControl}
             isP2PStream={roomMetadata.isP2PStream}
             remoteStream={remoteStream}
+            embedStartAt={embedStartAt}
+            embedSyncNonce={embedSyncNonce}
+            embedClockTime={embedClockTime}
+            embedClockRunning={embedClockRunning}
+            hostSyncTime={hostSyncTime}
             onBroadcastLocalStream={broadcastLocalStream}
+            onStopTabShare={handleStopTabShare}
+            onSyncEmbedToHost={syncEmbedToHost}
+            onEmbedPlayerEvent={handleEmbedPlayerEvent}
             videoRef={videoRef}
             controllerRef={playerControllerRef}
             onPlay={handlePlayerPlay}
@@ -269,6 +323,7 @@ export function App() {
 
       {/* Welcome / Join Modal */}
       <WelcomeModal
+        key={urlTitle || urlStream || 'default'}
         isOpen={isWelcomeOpen && !isRoomExpired && !(roomId && connectionStatus === 'connected')}
         initialRoomParam={urlRoom}
         initialStreamParam={urlStream}

@@ -12,13 +12,41 @@ export interface HostSession {
   savedAt: number
 }
 
-export function saveRoomChat(roomId: string, messages: ChatMessage[]): void {
+function sanitizeChatForLocalStorage(messages: ChatMessage[]): ChatMessage[] {
+  return messages.slice(-50).map((msg) => {
+    const hasDataImage = Boolean(msg.imageUrl?.startsWith('data:'))
+    const hasAudio = Boolean(msg.audioUrl)
+    let fallbackText = msg.text
+    if (!fallbackText && hasDataImage) fallbackText = '[Image]'
+    if (!fallbackText && hasAudio) fallbackText = '[Voice Note]'
+
+    return {
+      ...msg,
+      text: fallbackText,
+      imageUrl: hasDataImage ? undefined : msg.imageUrl,
+      audioUrl: undefined,
+    }
+  })
+}
+
+export function saveRoomChat(
+  roomId: string,
+  messages: ChatMessage[],
+  isPermanent?: boolean
+): void {
   if (typeof window === 'undefined' || !roomId) return
   try {
     const key = `dpwp_chat_${roomId}`
-    // Save last 100 messages to prevent excessive storage
+    // Save last 100 messages to sessionStorage for fast reload recovery
     const trimmed = messages.slice(-100)
     sessionStorage.setItem(key, JSON.stringify(trimmed))
+
+    // Persist lightweight chat history in localStorage for permanent rooms (100% client-side)
+    const permMap = getPermanentRoomsMap()
+    if (isPermanent || permMap[roomId]) {
+      const permKey = `dpwp_perm_chat_${roomId}`
+      localStorage.setItem(permKey, JSON.stringify(sanitizeChatForLocalStorage(messages)))
+    }
   } catch (err) {
     console.warn('Failed to save room chat:', err)
   }
@@ -27,10 +55,18 @@ export function saveRoomChat(roomId: string, messages: ChatMessage[]): void {
 export function getRoomChat(roomId: string): ChatMessage[] {
   if (typeof window === 'undefined' || !roomId) return []
   try {
-    const key = `dpwp_chat_${roomId}`
-    const raw = sessionStorage.getItem(key)
-    if (!raw) return []
-    return JSON.parse(raw) as ChatMessage[]
+    const sessionRaw = sessionStorage.getItem(`dpwp_chat_${roomId}`)
+    if (sessionRaw) {
+      const parsed = JSON.parse(sessionRaw) as ChatMessage[]
+      if (parsed.length > 0) return parsed
+    }
+
+    const permRaw = localStorage.getItem(`dpwp_perm_chat_${roomId}`)
+    if (permRaw) {
+      return JSON.parse(permRaw) as ChatMessage[]
+    }
+
+    return []
   } catch {
     return []
   }

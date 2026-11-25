@@ -38,7 +38,11 @@ export class PeerService {
   /**
    * Initialize a host peer with optional custom room ID and retry mechanism for reloads
    */
-  public async initHost(roomId?: string, retryCount: number = 0): Promise<string> {
+  public async initHost(
+    roomId?: string,
+    retryCount: number = 0,
+    strictCustomId: boolean = false
+  ): Promise<string> {
     this.isHost = true
     return new Promise((resolve, reject) => {
       this.cleanup()
@@ -64,8 +68,14 @@ export class PeerService {
         if (err.type === 'unavailable-id' && roomId) {
           if (retryCount < 2) {
             setTimeout(() => {
-              this.initHost(roomId, retryCount + 1).then(resolve).catch(reject)
+              this.initHost(roomId, retryCount + 1, strictCustomId).then(resolve).catch(reject)
             }, 1200)
+            return
+          }
+          if (strictCustomId) {
+            const collisionErr = new Error('Room ID is already in use by another active host.')
+            this.notifyStatus('error', collisionErr.message)
+            reject(collisionErr)
             return
           }
           this.initHost().then(resolve).catch(reject)
@@ -224,6 +234,7 @@ export class PeerService {
         try {
           const call = this.peer.call(conn.peer, this.activeLocalStream)
           if (call) {
+            this.capVideoBitrate(call)
             this.mediaCalls.set(conn.peer, call)
             call.on('close', () => {
               this.mediaCalls.delete(conn.peer)
@@ -435,6 +446,21 @@ export class PeerService {
     }
   }
 
+  private capVideoBitrate(call: MediaConnection, maxBitrate = 1_800_000): void {
+    const pc = call.peerConnection
+    if (!pc) return
+    for (const sender of pc.getSenders()) {
+      if (sender.track?.kind === 'video') {
+        const params = sender.getParameters()
+        if (!params.encodings || params.encodings.length === 0) {
+          params.encodings = [{}]
+        }
+        params.encodings[0].maxBitrate = maxBitrate
+        void sender.setParameters(params).catch(() => {})
+      }
+    }
+  }
+
   public broadcastStream(stream: MediaStream): void {
     this.activeLocalStream = stream
     if (!this.peer || !this.isHost) return
@@ -452,6 +478,7 @@ export class PeerService {
       try {
         const call = this.peer.call(guestId, stream)
         if (call) {
+          this.capVideoBitrate(call)
           this.mediaCalls.set(guestId, call)
           call.on('close', () => {
             this.mediaCalls.delete(guestId)

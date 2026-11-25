@@ -5,10 +5,12 @@ import { parseMediaUrl } from '@/utils/mediaUrl'
 import { parseCurrentRoute } from '@/utils/routeUtils'
 import {
   saveHostSession,
+  getHostSession,
   clearHostSession,
   saveRoomChat,
   getRoomChat,
 } from '@/utils/sessionUtils'
+import { validateRoomIdFormat } from '@/utils/roomValidation'
 import {
   logPartyEvent,
   registerPartyRoom,
@@ -16,6 +18,7 @@ import {
   updatePartyRoomHeartbeat,
   updatePartyRoomPermanent,
   checkPartyRoomStatus,
+  checkRoomIdEligibility,
   endPartyRoom,
 } from '@/services/firebaseService'
 import type { UnifiedPlayerRef } from '@/types/player.types'
@@ -130,7 +133,7 @@ export function useWatchParty() {
       if (prev.some((m) => m.id === msg.id)) return prev
       const next = [...prev, msg]
       if (roomIdRef.current) {
-        saveRoomChat(roomIdRef.current, next)
+        saveRoomChat(roomIdRef.current, next, isPermanentRef.current)
       }
       return next
     })
@@ -143,8 +146,30 @@ export function useWatchParty() {
   const lastSyncTime = useRef<number>(0)
   const participantNamesRef = useRef<Record<string, string>>({})
 
+  // Embed Watch-Clock & ?startAt= Sync State
+  const [embedClockTime, setEmbedClockTime] = useState<number>(0)
+  const [embedClockRunning, setEmbedClockRunning] = useState<boolean>(true)
+  const [hostSyncTime, setHostSyncTime] = useState<number>(0)
+  const [embedStartAt, setEmbedStartAt] = useState<number>(0)
+  const [embedSyncNonce, setEmbedSyncNonce] = useState<number>(0)
+  const embedClockTimeRef = useRef<number>(0)
+  const embedClockRunningRef = useRef<boolean>(true)
+  const isEmbedRoomRef = useRef<boolean>(false)
+  const lastEmbedTelemetryRef = useRef<number>(0)
+
+  useEffect(() => {
+    isEmbedRoomRef.current = parseMediaUrl(
+      roomMetadata.streamUrl,
+      undefined,
+      roomMetadata.sourceType
+    ).isEmbed
+  }, [roomMetadata.streamUrl, roomMetadata.sourceType])
+
   // Unified playback state helpers
   const getCurrentPlaybackTime = useCallback((): number => {
+    if (isEmbedRoomRef.current) {
+      return embedClockTimeRef.current
+    }
     if (playerControllerRef.current) {
       return playerControllerRef.current.getCurrentTime()
     }
@@ -152,6 +177,9 @@ export function useWatchParty() {
   }, [])
 
   const getIsPlayingState = useCallback((): boolean => {
+    if (isEmbedRoomRef.current) {
+      return embedClockRunningRef.current
+    }
     if (playerControllerRef.current) {
       return playerControllerRef.current.isPlaying()
     }
@@ -386,6 +414,10 @@ export function useWatchParty() {
     peerService.broadcastStream(stream)
   }, [])
 
+  const stopLocalStream = useCallback(() => {
+    peerService.stopStream()
+  }, [])
+
   // Toggle host only control mode
   const toggleHostOnlyControl = useCallback(() => {
     if (!isHost) return
@@ -491,6 +523,11 @@ export function useWatchParty() {
         case 'SYNC_STATE': {
           if (isHost) break // only guests sync with host heartbeat
           const { isPlaying, currentTime } = packet.payload as SyncPayload
+          setHostSyncTime(currentTime)
+          if (isEmbedRoomRef.current) {
+            setEmbedClockRunning(isPlaying)
+            break
+          }
           const curTime = getCurrentPlaybackTime()
           const isCurPlaying = getIsPlayingState()
           const drift = Math.abs(curTime - currentTime)
@@ -536,6 +573,10 @@ export function useWatchParty() {
         case 'HOST_CHANGE_STREAM': {
           const meta = packet.payload as RoomMetadata
           setRoomMetadata(meta)
+          embedClockTimeRef.current = 0
+          setEmbedClockTime(0)
+          setEmbedStartAt(0)
+          setHostSyncTime(0)
           if (!meta.isP2PStream) {
             setRemoteStream(null)
           }
@@ -802,13 +843,21 @@ export function useWatchParty() {
           if (typeof ack.roomMetadata?.isLocked === 'boolean') {
             setIsRoomLocked(ack.roomMetadata.isLocked)
           }
+          if (typeof ack.roomMetadata?.isPermanent === 'boolean') {
+            setIsPermanent(ack.roomMetadata.isPermanent)
+            isPermanentRef.current = ack.roomMetadata.isPermanent
+          }
           if (ack.chatHistory && ack.chatHistory.length > 0) {
             setMessages((prev) => {
               const existingIds = new Set(prev.map((m) => m.id))
               const toAdd = ack.chatHistory!.filter((m) => !existingIds.has(m.id))
               const merged = [...prev, ...toAdd].sort((a, b) => a.timestamp - b.timestamp)
               if (roomIdRef.current) {
-                saveRoomChat(roomIdRef.current, merged)
+                saveRoomChat(
+                  roomIdRef.current,
+                  merged,
+                  Boolean(ack.roomMetadata?.isPermanent ?? isPermanentRef.current)
+                )
               }
               return merged
             })
@@ -823,15 +872,36 @@ export function useWatchParty() {
 
           addSystemNotice(`Joined party hosted by ${hostDisplayName}!`)
           if (ack.currentState) {
-            if (playerControllerRef.current) {
-              playerControllerRef.current.seekTo(ack.currentState.currentTime)
-              if (ack.currentState.isPlaying) {
+            const { currentTime: targetTime, isPlaying: shouldPlay } = ack.currentState
+            setHostSyncTime(targetTime)
+            const isAckEmbed = parseMediaUrl(
+              ack.roomMetadata.streamUrl,
+              undefined,
+              ack.roomMetadata.sourceType
+            ).isEmbed
+            if (isAckEmbed) {
+              setEmbedClockRunning(shouldPlay)
+              if (targetTime > 5) {
+                setEmbedStartAt(Math.floor(targetTime))
+              }
+            } else if (playerControllerRef.current) {
+              playerControllerRef.current.seekTo(targetTime)
+              if (shouldPlay) {
                 playerControllerRef.current.play()
               }
             } else if (video) {
-              video.currentTime = ack.currentState.currentTime
-              if (ack.currentState.isPlaying) {
-                video.play().catch(() => {})
+              const applyInitialSync = () => {
+                if (targetTime > 0.5) {
+                  video.currentTime = targetTime
+                }
+                if (shouldPlay) {
+                  video.play().catch(() => {})
+                }
+              }
+              if (video.readyState >= 1) {
+                applyInitialSync()
+              } else {
+                video.addEventListener('loadedmetadata', applyInitialSync, { once: true })
               }
             }
           }
@@ -863,9 +933,26 @@ export function useWatchParty() {
         setConnectionStatus('connecting')
         setErrorMessage(null)
 
+        const cleanCustomId = initialRoomId?.trim().toLowerCase()
+        if (cleanCustomId) {
+          const formatCheck = validateRoomIdFormat(cleanCustomId)
+          if (!formatCheck.valid) {
+            setConnectionStatus('error')
+            setErrorMessage(formatCheck.reason || 'Invalid Room ID')
+            return
+          }
+          const hasOwnership = Boolean(getHostSession(cleanCustomId))
+          const eligibility = await checkRoomIdEligibility(cleanCustomId, hasOwnership, hasOwnership)
+          if (!eligibility.eligible) {
+            setConnectionStatus('error')
+            setErrorMessage(eligibility.reason || 'Room ID is already in use.')
+            return
+          }
+        }
+
         const generatedRoomId =
-          initialRoomId || `dpwp-${Math.random().toString(36).substring(2, 8)}`
-        const id = await peerService.initHost(generatedRoomId)
+          cleanCustomId || `dpwp-${Math.random().toString(36).substring(2, 8)}`
+        const id = await peerService.initHost(generatedRoomId, 0, Boolean(cleanCustomId))
 
         setRoomId(id)
         setIsHost(true)
@@ -876,7 +963,11 @@ export function useWatchParty() {
           setMessages(cached)
         }
 
-        const parsed = parseMediaUrl(initialMeta?.streamUrl || '', initialMeta?.roomTitle)
+        const parsed = parseMediaUrl(
+          initialMeta?.streamUrl || '',
+          initialMeta?.roomTitle,
+          initialMeta?.sourceType
+        )
         const initCap = Math.max(2, Math.min(15, initialMeta?.maxCapacity ?? 10))
         const initLocked = Boolean(initialMeta?.isLocked)
         const initPasscode = initialMeta?.passcode || ''
@@ -897,6 +988,7 @@ export function useWatchParty() {
           roomId: id,
           roomTitle: initialMeta?.roomTitle || parsed.title || 'Movie Watch Party',
           streamUrl: parsed.normalizedUrl,
+          sourceType: initialMeta?.sourceType || parsed.mediaType,
           posterUrl: initialMeta?.posterUrl || '',
           isHostOnlyControl: true,
           hostId: id,
@@ -1464,6 +1556,9 @@ export function useWatchParty() {
         if (roomIdRef.current) {
           saveHostSession(roomIdRef.current, updated)
           void updatePartyRoomPermanent(roomIdRef.current, next)
+          if (next) {
+            saveRoomChat(roomIdRef.current, messagesRef.current, true)
+          }
         }
         peerService.send({
           type: 'ROOM_METADATA',
@@ -1481,6 +1576,115 @@ export function useWatchParty() {
       return next
     })
   }, [userName, addSystemNotice])
+
+  // Host embed watch-clock ticker (tracks elapsed movie time for ?startAt= guest sync)
+  useEffect(() => {
+    const isEmbed = parseMediaUrl(
+      roomMetadata.streamUrl,
+      undefined,
+      roomMetadata.sourceType
+    ).isEmbed
+    if (!isHost || connectionStatus !== 'connected' || !isEmbed || !embedClockRunning) return
+
+    const tick = setInterval(() => {
+      // Only fallback-tick if the embed hasn't sent real postMessage telemetry recently
+      if (Date.now() - lastEmbedTelemetryRef.current < 3000) return
+      embedClockTimeRef.current += 1
+      setEmbedClockTime(embedClockTimeRef.current)
+    }, 1000)
+
+    return () => clearInterval(tick)
+  }, [isHost, connectionStatus, roomMetadata.streamUrl, roomMetadata.sourceType, embedClockRunning])
+
+  const adjustEmbedClock = useCallback(
+    (value: number, isAbsolute = false) => {
+      if (!isHost) return
+      const next = Math.max(0, Math.floor(isAbsolute ? value : embedClockTimeRef.current + value))
+      embedClockTimeRef.current = next
+      setEmbedClockTime(next)
+      peerService.send({
+        type: 'SYNC_STATE',
+        senderId: peerService.myPeerId,
+        senderName: userName,
+        payload: {
+          isPlaying: embedClockRunningRef.current,
+          currentTime: next,
+          playbackRate: 1.0,
+          timestamp: Date.now(),
+        } as SyncPayload,
+      })
+    },
+    [isHost, userName]
+  )
+
+  const toggleEmbedClock = useCallback(() => {
+    if (!isHost) return
+    const next = !embedClockRunningRef.current
+    embedClockRunningRef.current = next
+    setEmbedClockRunning(next)
+    peerService.send({
+      type: 'SYNC_STATE',
+      senderId: peerService.myPeerId,
+      senderName: userName,
+      payload: {
+        isPlaying: next,
+        currentTime: embedClockTimeRef.current,
+        playbackRate: 1.0,
+        timestamp: Date.now(),
+      } as SyncPayload,
+    })
+  }, [isHost, userName])
+
+  const syncEmbedToHost = useCallback(() => {
+    setEmbedStartAt(Math.max(1, Math.floor(hostSyncTime)))
+    setEmbedSyncNonce((n) => n + 1)
+  }, [hostSyncTime])
+
+  const handleEmbedPlayerEvent = useCallback(
+    (currentTime: number, eventName?: string) => {
+      if (!isHost) return
+      lastEmbedTelemetryRef.current = Date.now()
+
+      const prevTime = embedClockTimeRef.current
+      let jumped = false
+      if (Number.isFinite(currentTime) && currentTime >= 0) {
+        if (Math.abs(currentTime - prevTime) > 3.5) {
+          jumped = true
+        }
+        embedClockTimeRef.current = currentTime
+        setEmbedClockTime(currentTime)
+      }
+
+      const evt = (eventName || '').toLowerCase()
+      let stateChanged = jumped
+      if (evt === 'play' || evt === 'playing') {
+        if (!embedClockRunningRef.current) stateChanged = true
+        embedClockRunningRef.current = true
+        setEmbedClockRunning(true)
+      } else if (evt === 'pause' || evt === 'paused' || evt === 'ended') {
+        if (embedClockRunningRef.current) stateChanged = true
+        embedClockRunningRef.current = false
+        setEmbedClockRunning(false)
+      } else if (evt === 'seeked') {
+        stateChanged = true
+      }
+
+      if (stateChanged) {
+        peerService.send({
+          type: 'SYNC_STATE',
+          senderId: peerService.myPeerId,
+          senderName: userName,
+          payload: {
+            isPlaying: embedClockRunningRef.current,
+            currentTime: embedClockTimeRef.current,
+            playbackRate: 1.0,
+            timestamp: Date.now(),
+          } as SyncPayload,
+        })
+      }
+    },
+    [isHost, userName]
+  )
 
   // Cleanup on unmount
   useEffect(() => {
@@ -1526,6 +1730,16 @@ export function useWatchParty() {
     bufferingPeerName,
     remoteStream,
     broadcastLocalStream,
+    stopLocalStream,
+    embedClockTime,
+    embedClockRunning,
+    hostSyncTime,
+    embedStartAt,
+    embedSyncNonce,
+    adjustEmbedClock,
+    toggleEmbedClock,
+    syncEmbedToHost,
+    handleEmbedPlayerEvent,
     videoRef,
     playerControllerRef,
     triggerReaction,

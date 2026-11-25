@@ -12,7 +12,11 @@ export interface ParsedMedia {
   title?: string
 }
 
-export function parseMediaUrl(rawUrl: string, defaultTitle?: string): ParsedMedia {
+export function parseMediaUrl(
+  rawUrl: string,
+  defaultTitle?: string,
+  explicitType?: string | null
+): ParsedMedia {
   const url = (rawUrl || '').trim()
   if (!url) {
     return {
@@ -53,7 +57,7 @@ export function parseMediaUrl(rawUrl: string, defaultTitle?: string): ParsedMedi
   }
 
   // 2. HLS stream detection
-  if (url.includes('.m3u8')) {
+  if (explicitType === 'hls' || url.includes('.m3u8')) {
     return {
       normalizedUrl: url,
       isEmbed: false,
@@ -63,8 +67,9 @@ export function parseMediaUrl(rawUrl: string, defaultTitle?: string): ParsedMedi
     }
   }
 
-  // 3. Third-Party Embeds (iFrame)
+  // 3. Explicit Embed or Third-Party Embeds (iFrame)
   const isEmbed =
+    explicitType === 'embed' ||
     url.includes('/embed') ||
     url.includes('vidsrc') ||
     url.includes('2embed') ||
@@ -79,5 +84,19 @@ export function parseMediaUrl(rawUrl: string, defaultTitle?: string): ParsedMedi
     isYouTube: false,
     mediaType: isEmbed ? 'embed' : 'direct',
     title: defaultTitle || (isEmbed ? 'Embedded Stream' : 'Video Stream'),
+  }
+}
+
+/**
+ * Append or update ?startAt=<seconds> query param for embed players that support start time.
+ */
+export function withStartAtParam(rawUrl: string, seconds: number): string {
+  if (!rawUrl || seconds <= 0) return rawUrl
+  try {
+    const parsed = new URL(rawUrl)
+    parsed.searchParams.set('startAt', String(Math.floor(seconds)))
+    return parsed.toString()
+  } catch {
+    return rawUrl
   }
 }
