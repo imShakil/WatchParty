@@ -13,6 +13,7 @@ import {
   Lock,
   Unlock,
   KeyRound,
+  Pin,
   Minus,
   Plus,
 } from 'lucide-react'
@@ -32,6 +33,8 @@ interface PartyChatProps {
   onToggleRoomLock?: () => void
   roomPasscode?: string
   onUpdateRoomPasscode?: (code: string) => void
+  isPermanent?: boolean
+  onTogglePermanent?: () => void
   maxCapacity?: number
   onUpdateMaxCapacity?: (cap: number) => void
   onSendMessage: (text: string, imageUrl?: string, audioUrl?: string, audioDuration?: number) => void
@@ -58,6 +61,8 @@ export const PartyChat: React.FC<PartyChatProps> = ({
   onToggleRoomLock,
   roomPasscode = '',
   onUpdateRoomPasscode,
+  isPermanent = false,
+  onTogglePermanent,
   maxCapacity = 10,
   onUpdateMaxCapacity,
   onSendMessage,
@@ -207,6 +212,11 @@ export const PartyChat: React.FC<PartyChatProps> = ({
           {Boolean(roomPasscode) && (
             <span title={`Passcode Protected ("${roomPasscode}")`} style={{ display: 'inline-flex', alignItems: 'center' }}>
               <KeyRound size={12} color="#c084fc" />
+            </span>
+          )}
+          {isPermanent && (
+            <span title="Permanent Room" style={{ display: 'inline-flex', alignItems: 'center' }}>
+              <Pin size={12} color="#fbbf24" />
             </span>
           )}
         </button>
@@ -454,6 +464,60 @@ export const PartyChat: React.FC<PartyChatProps> = ({
                     </button>
                   </form>
                 )}
+              </div>
+
+              {/* Permanent Room Toggle */}
+              <div
+                style={{
+                  padding: '0.75rem 0.85rem',
+                  borderRadius: 'var(--radius-md)',
+                  background: isPermanent ? 'rgba(251, 191, 36, 0.1)' : 'rgba(255, 255, 255, 0.04)',
+                  border: isPermanent ? '1px solid rgba(251, 191, 36, 0.35)' : '1px solid var(--border-subtle)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  transition: 'all 0.2s',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                  <div
+                    style={{
+                      width: '30px',
+                      height: '30px',
+                      borderRadius: '8px',
+                      background: isPermanent ? 'rgba(251, 191, 36, 0.2)' : 'rgba(255, 255, 255, 0.06)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: isPermanent ? '#fbbf24' : 'var(--text-dim)',
+                    }}
+                  >
+                    <Pin size={15} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: isPermanent ? '#fbbf24' : 'var(--text-main)' }}>
+                      Permanent Room {isPermanent ? '(Active)' : ''}
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '2px' }}>
+                      {isPermanent ? 'Link & settings saved indefinitely' : 'Auto-closes when host leaves'}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={onTogglePermanent}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: isPermanent ? '#fbbf24' : 'var(--text-dim)',
+                    padding: '0.2rem',
+                  }}
+                  title={isPermanent ? 'Switch to Temporary Room' : 'Make Room Permanent'}
+                  aria-label={isPermanent ? 'Switch to Temporary Room' : 'Make Room Permanent'}
+                >
+                  {isPermanent ? <ToggleRight size={26} /> : <ToggleLeft size={26} />}
+                </button>
               </div>
 
               {/* Room Capacity Stepper (Default 10, Max 15) */}

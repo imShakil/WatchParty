@@ -20,6 +20,7 @@ export function App() {
     connectionStatus,
     errorMessage,
     isRoomExpired,
+    isRoomStandby,
     roomExpiredReason,
     isHostReconnecting,
     hostReconnectCountdown,
@@ -33,6 +34,8 @@ export function App() {
     toggleRoomLock,
     roomPasscode,
     updateRoomPasscode,
+    isPermanent,
+    toggleRoomPermanent,
     maxCapacity,
     updateMaxCapacity,
     userName,
@@ -104,7 +107,14 @@ export function App() {
     void checkPartyRoomStatus(urlRoom).then((status) => {
       if (status.exists && !status.isActive) {
         setIsWelcomeOpen(false)
-        markRoomExpired('This watch party has already ended or the host is offline.')
+        if (status.isPermanent) {
+          markRoomExpired(
+            'This permanent watch room is currently on standby. The host is away.',
+            true
+          )
+        } else {
+          markRoomExpired('This watch party has already ended or the host is offline.', false)
+        }
       }
     })
   }, [urlRoom, markRoomExpired, connectionStatus])
@@ -113,7 +123,8 @@ export function App() {
     streamUrl?: string,
     title?: string,
     customRoomId?: string,
-    posterUrl?: string
+    posterUrl?: string,
+    permanentFlag?: boolean
   ) => {
     const defaultStream =
       urlStream || streamUrl || 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8'
@@ -124,6 +135,7 @@ export function App() {
       streamUrl: defaultStream,
       roomTitle: defaultTitle,
       posterUrl: defaultPoster,
+      isPermanent: permanentFlag,
     })
     setIsWelcomeOpen(false)
   }
@@ -245,6 +257,8 @@ export function App() {
           onToggleRoomLock={toggleRoomLock}
           roomPasscode={roomPasscode}
           onUpdateRoomPasscode={updateRoomPasscode}
+          isPermanent={isPermanent}
+          onTogglePermanent={toggleRoomPermanent}
           maxCapacity={maxCapacity}
           onUpdateMaxCapacity={updateMaxCapacity}
           onSendMessage={sendChatMessage}
@@ -265,16 +279,26 @@ export function App() {
         onJoinParty={handleJoinParty}
       />
 
-      {/* Theater Closed / Room Expired Modal */}
+      {/* Theater Closed / Room Expired / Standby Modal */}
       <RoomExpiredModal
         isOpen={isRoomExpired}
         roomId={roomId || urlRoom || ''}
         roomTitle={roomMetadata.roomTitle}
         reason={roomExpiredReason}
+        isStandby={isRoomStandby}
         onReturnHome={dismissRoomExpired}
         onKeepWatchingSolo={continueWatchingSolo}
         onTakeOverHost={takeOverAsHost}
         onJoinWithPasscode={(passcode) => joinRoom(roomId || urlRoom || '', passcode)}
+        onWakeUpHost={() =>
+          startHost(roomId || urlRoom || '', {
+            streamUrl: roomMetadata.streamUrl,
+            roomTitle: roomMetadata.roomTitle,
+            posterUrl: roomMetadata.posterUrl,
+            isPermanent: true,
+          })
+        }
+        onWaitForHost={() => joinRoom(roomId || urlRoom || '')}
         onHostParty={() => {
           dismissRoomExpired()
           window.location.href = '/?action=host'

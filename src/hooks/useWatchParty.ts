@@ -14,6 +14,7 @@ import {
   registerPartyRoom,
   updatePartyRoomParticipantCount,
   updatePartyRoomHeartbeat,
+  updatePartyRoomPermanent,
   checkPartyRoomStatus,
   endPartyRoom,
 } from '@/services/firebaseService'
@@ -38,6 +39,7 @@ export function useWatchParty() {
   >('disconnected')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isRoomExpired, setIsRoomExpired] = useState<boolean>(false)
+  const [isRoomStandby, setIsRoomStandby] = useState<boolean>(false)
   const [roomExpiredReason, setRoomExpiredReason] = useState<string>('')
   const [isHostReconnecting, setIsHostReconnecting] = useState<boolean>(false)
   const [hostReconnectCountdown, setHostReconnectCountdown] = useState<number>(35)
@@ -72,10 +74,12 @@ export function useWatchParty() {
   const [maxCapacity, setMaxCapacity] = useState<number>(10)
   const [isRoomLocked, setIsRoomLocked] = useState<boolean>(false)
   const [roomPasscode, setRoomPasscode] = useState<string>('')
+  const [isPermanent, setIsPermanent] = useState<boolean>(false)
 
   const maxCapacityRef = useRef<number>(10)
   const isRoomLockedRef = useRef<boolean>(false)
   const roomPasscodeRef = useRef<string>('')
+  const isPermanentRef = useRef<boolean>(false)
   const joinPasscodeRef = useRef<string>('')
   const isJoinRejectedRef = useRef<boolean>(false)
 
@@ -876,12 +880,18 @@ export function useWatchParty() {
         const initCap = Math.max(2, Math.min(15, initialMeta?.maxCapacity ?? 10))
         const initLocked = Boolean(initialMeta?.isLocked)
         const initPasscode = initialMeta?.passcode || ''
+        const initPermanent = Boolean(initialMeta?.isPermanent)
         setMaxCapacity(initCap)
         maxCapacityRef.current = initCap
         setIsRoomLocked(initLocked)
         isRoomLockedRef.current = initLocked
         setRoomPasscode(initPasscode)
         roomPasscodeRef.current = initPasscode
+        setIsPermanent(initPermanent)
+        isPermanentRef.current = initPermanent
+        setIsRoomExpired(false)
+        setIsRoomStandby(false)
+        setRoomExpiredReason('')
 
         const meta: RoomMetadata = {
           roomId: id,
@@ -893,6 +903,7 @@ export function useWatchParty() {
           maxCapacity: initCap,
           isLocked: initLocked,
           passcode: initPasscode,
+          isPermanent: initPermanent,
         }
         setRoomMetadata(meta)
         saveHostSession(id, meta)
@@ -901,12 +912,17 @@ export function useWatchParty() {
           roomId: id,
           title: meta.roomTitle,
           isP2P: Boolean(meta.isP2PStream),
+          isPermanent: initPermanent,
         })
         void registerPartyRoom(id, {
           title: meta.roomTitle,
           hostName: userName,
           isP2P: meta.isP2PStream,
           streamUrl: meta.streamUrl,
+          posterUrl: meta.posterUrl,
+          maxCapacity: initCap,
+          isLocked: initLocked,
+          isPermanent: initPermanent,
         })
 
         setParticipants([
@@ -958,11 +974,28 @@ export function useWatchParty() {
         // Verify room in Firestore first if available
         const roomStatus = await checkPartyRoomStatus(cleanId)
         if (roomStatus.exists && !roomStatus.isActive) {
+          if (roomStatus.isPermanent) {
+            setIsRoomStandby(true)
+            setRoomMetadata((prev) => ({
+              ...prev,
+              roomId: cleanId,
+              roomTitle: roomStatus.title || prev.roomTitle,
+              streamUrl: roomStatus.streamUrl || prev.streamUrl,
+              posterUrl: roomStatus.posterUrl || prev.posterUrl,
+              isPermanent: true,
+            }))
+            setRoomExpiredReason(
+              'This permanent watch room is currently on standby. The host is away.'
+            )
+          } else {
+            setIsRoomStandby(false)
+            setRoomExpiredReason('This watch party has already ended or the host is offline.')
+          }
           setIsRoomExpired(true)
-          setRoomExpiredReason('This watch party has already ended or the host is offline.')
           setConnectionStatus('disconnected')
           return
         }
+        setIsRoomStandby(false)
 
         if (roomStatus.title) {
           setRoomMetadata((prev) => ({ ...prev, roomTitle: roomStatus.title || prev.roomTitle }))
@@ -1198,7 +1231,7 @@ export function useWatchParty() {
           payload: { peerId: peerService.myPeerId, userName },
         })
       } else if (isHost && roomIdRef.current && isIntentionalExit.current) {
-        void endPartyRoom(roomIdRef.current)
+        void endPartyRoom(roomIdRef.current, isPermanentRef.current)
       }
     }
     window.addEventListener('beforeunload', handleBeforeUnload)
@@ -1263,7 +1296,7 @@ export function useWatchParty() {
 
     if (isHost) {
       if (roomId) {
-        void endPartyRoom(roomId)
+        void endPartyRoom(roomId, isPermanentRef.current)
       }
       peerService.send({
         type: 'ROOM_CLOSED',
@@ -1279,7 +1312,7 @@ export function useWatchParty() {
         payload: { peerId: peerService.myPeerId, userName },
       })
     }
-    clearHostSession()
+    clearHostSession(roomId, isPermanentRef.current)
     peerService.cleanup()
     setRoomId('')
     setIsHost(false)
@@ -1336,7 +1369,8 @@ export function useWatchParty() {
     })
   }, [getCurrentPlaybackTime, roomMetadata, startHost])
 
-  const markRoomExpired = useCallback((reason?: string) => {
+  const markRoomExpired = useCallback((reason?: string, standby?: boolean) => {
+    setIsRoomStandby(Boolean(standby))
     setIsRoomExpired(true)
     if (reason) {
       setRoomExpiredReason(reason)
@@ -1352,6 +1386,7 @@ export function useWatchParty() {
     }
     setIsHostReconnecting(false)
     setIsRoomExpired(false)
+    setIsRoomStandby(false)
     setRoomExpiredReason('')
     setConnectionStatus('disconnected')
     clearHostSession()
@@ -1419,6 +1454,34 @@ export function useWatchParty() {
     )
   }, [userName, addSystemNotice])
 
+  // Toggle Permanent Room Mode
+  const toggleRoomPermanent = useCallback(() => {
+    setIsPermanent((prev) => {
+      const next = !prev
+      isPermanentRef.current = next
+      setRoomMetadata((m) => {
+        const updated: RoomMetadata = { ...m, isPermanent: next }
+        if (roomIdRef.current) {
+          saveHostSession(roomIdRef.current, updated)
+          void updatePartyRoomPermanent(roomIdRef.current, next)
+        }
+        peerService.send({
+          type: 'ROOM_METADATA',
+          senderId: peerService.myPeerId,
+          senderName: userName,
+          payload: updated,
+        })
+        return updated
+      })
+      addSystemNotice(
+        next
+          ? '📌 Room marked as Permanent. Link & settings will persist indefinitely.'
+          : '🕒 Room switched to Standard (temporary) mode.'
+      )
+      return next
+    })
+  }, [userName, addSystemNotice])
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -1434,6 +1497,7 @@ export function useWatchParty() {
     connectionStatus,
     errorMessage,
     isRoomExpired,
+    isRoomStandby,
     roomExpiredReason,
     isHostReconnecting,
     hostReconnectCountdown,
@@ -1449,6 +1513,8 @@ export function useWatchParty() {
     updateMaxCapacity,
     roomPasscode,
     updateRoomPasscode,
+    isPermanent,
+    toggleRoomPermanent,
     userName,
     updateUserName,
     roomMetadata,

@@ -111,8 +111,10 @@ export async function registerPartyRoom(
     hostName: string
     isP2P?: boolean
     streamUrl?: string
+    posterUrl?: string
     maxCapacity?: number
     isLocked?: boolean
+    isPermanent?: boolean
   }
 ): Promise<void> {
   const { firestore } = getFirebase()
@@ -127,8 +129,11 @@ export async function registerPartyRoom(
         title: data.title || 'Live Watch Party',
         hostName: data.hostName || 'Host',
         isP2P: Boolean(data.isP2P),
+        ...(data.streamUrl ? { streamUrl: data.streamUrl } : {}),
+        ...(data.posterUrl ? { posterUrl: data.posterUrl } : {}),
         maxCapacity: data.maxCapacity || 10,
         isLocked: Boolean(data.isLocked),
+        isPermanent: Boolean(data.isPermanent),
         participantCount: 1,
         status: 'active',
         createdAt: serverTimestamp(),
@@ -138,6 +143,27 @@ export async function registerPartyRoom(
     )
   } catch (err) {
     console.warn('[DekhoParty] Firestore register room skipped:', err)
+  }
+}
+
+/**
+ * Update room permanent flag in Firestore
+ */
+export async function updatePartyRoomPermanent(
+  roomId: string,
+  isPermanent: boolean
+): Promise<void> {
+  const { firestore } = getFirebase()
+  if (!firestore || !roomId) return
+
+  try {
+    const roomRef = doc(firestore, 'party_rooms', roomId)
+    await updateDoc(roomRef, {
+      isPermanent,
+      lastActiveAt: serverTimestamp(),
+    })
+  } catch {
+    // Non-fatal
   }
 }
 
@@ -193,7 +219,11 @@ export async function updatePartyRoomHeartbeat(
 export async function checkPartyRoomStatus(roomId: string): Promise<{
   exists: boolean
   isActive: boolean
+  isPermanent?: boolean
+  status?: 'active' | 'standby' | 'ended'
   title?: string
+  streamUrl?: string
+  posterUrl?: string
   isLocked?: boolean
   isFull?: boolean
   maxCapacity?: number
@@ -216,7 +246,9 @@ export async function checkPartyRoomStatus(roomId: string): Promise<{
     const lastActive =
       data.lastActiveAt?.toMillis?.() || data.createdAt?.toMillis?.() || 0
     const isStale = now - lastActive > STALE_ROOM_THRESHOLD_MS
+    const isPermanent = Boolean(data.isPermanent)
     const isActive = data.status === 'active' && !isStale
+    const status = isActive ? 'active' : isPermanent ? 'standby' : 'ended'
     const maxCapacity = (data.maxCapacity as number) || 10
     const participantCount = (data.participantCount as number) || 1
     const isLocked = Boolean(data.isLocked)
@@ -225,7 +257,11 @@ export async function checkPartyRoomStatus(roomId: string): Promise<{
     return {
       exists: true,
       isActive,
+      isPermanent,
+      status,
       title: (data.title as string) || undefined,
+      streamUrl: (data.streamUrl as string) || undefined,
+      posterUrl: (data.posterUrl as string) || undefined,
       isLocked,
       isFull,
       maxCapacity,
@@ -255,10 +291,17 @@ export async function cleanupStalePartyRooms(): Promise<void> {
       const lastActive =
         data.lastActiveAt?.toMillis?.() || data.createdAt?.toMillis?.() || 0
       if (now - lastActive > STALE_ROOM_THRESHOLD_MS) {
-        void updateDoc(docSnap.ref, {
-          status: 'ended',
-          endedAt: serverTimestamp(),
-        }).catch(() => {})
+        if (data.isPermanent) {
+          void updateDoc(docSnap.ref, {
+            status: 'standby',
+            participantCount: 0,
+          }).catch(() => {})
+        } else {
+          void updateDoc(docSnap.ref, {
+            status: 'ended',
+            endedAt: serverTimestamp(),
+          }).catch(() => {})
+        }
       }
     })
   } catch {
@@ -267,19 +310,27 @@ export async function cleanupStalePartyRooms(): Promise<void> {
 }
 
 /**
- * Mark watch party room as ended/closed in Firestore
+ * Mark watch party room as ended/closed (or standby if permanent) in Firestore
  */
-export async function endPartyRoom(roomId: string): Promise<void> {
+export async function endPartyRoom(roomId: string, isPermanent?: boolean): Promise<void> {
   const { firestore } = getFirebase()
   if (!firestore || !roomId) return
 
   try {
     const roomRef = doc(firestore, 'party_rooms', roomId)
-    await updateDoc(roomRef, {
-      status: 'ended',
-      endedAt: serverTimestamp(),
-      lastActiveAt: serverTimestamp(),
-    })
+    if (isPermanent) {
+      await updateDoc(roomRef, {
+        status: 'standby',
+        participantCount: 0,
+        lastActiveAt: serverTimestamp(),
+      })
+    } else {
+      await updateDoc(roomRef, {
+        status: 'ended',
+        endedAt: serverTimestamp(),
+        lastActiveAt: serverTimestamp(),
+      })
+    }
   } catch {
     // Non-fatal if already removed
   }
@@ -326,11 +377,18 @@ export function subscribeToActivePartyStats(
             validRooms += 1
             totalViewers += Number(roomData.participantCount) || 1
           } else if (isHardStale && roomData.status === 'active') {
-            // Asynchronously mark hard stale room as ended in Firestore
-            void updateDoc(docSnap.ref, {
-              status: 'ended',
-              endedAt: serverTimestamp(),
-            }).catch(() => {})
+            if (roomData.isPermanent) {
+              void updateDoc(docSnap.ref, {
+                status: 'standby',
+                participantCount: 0,
+              }).catch(() => {})
+            } else {
+              // Asynchronously mark hard stale room as ended in Firestore
+              void updateDoc(docSnap.ref, {
+                status: 'ended',
+                endedAt: serverTimestamp(),
+              }).catch(() => {})
+            }
           }
         })
 

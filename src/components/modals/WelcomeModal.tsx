@@ -8,7 +8,13 @@ interface WelcomeModalProps {
   initialTitleParam: string | null
   userName: string
   onSaveName: (name: string) => void
-  onHostParty: (streamUrl?: string, title?: string, customRoomId?: string) => void
+  onHostParty: (
+    streamUrl?: string,
+    title?: string,
+    customRoomId?: string,
+    posterUrl?: string,
+    isPermanent?: boolean
+  ) => void
   onJoinParty: (roomId: string) => void
 }
 
@@ -26,6 +32,7 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({
   const [joinCode, setJoinCode] = useState<string>(initialRoomParam || '')
   const [partyTitle, setPartyTitle] = useState<string>(initialTitleParam || 'My Watch Party')
   const [customRoomId, setCustomRoomId] = useState<string>('')
+  const [isPermanent, setIsPermanent] = useState<boolean>(false)
   const [showAdvancedHost, setShowAdvancedHost] = useState<boolean>(false)
 
   const streamUrl = initialStreamParam || 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8'
@@ -36,7 +43,7 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({
   const handleStartHosting = () => {
     onSaveName(name.trim() || userName)
     const sanitizedSlug = customRoomId.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '')
-    onHostParty(streamUrl, streamTitle, sanitizedSlug || undefined)
+    onHostParty(streamUrl, streamTitle, sanitizedSlug || undefined, undefined, isPermanent)
   }
 
   const handleJoinExisting = () => {
@@ -221,6 +228,26 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({
                         outline: 'none',
                       }}
                     />
+                    <label
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.45rem',
+                        marginTop: '0.5rem',
+                        cursor: 'pointer',
+                        fontSize: '0.725rem',
+                        color: isPermanent ? '#fbbf24' : 'var(--text-dim)',
+                        fontWeight: 500,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isPermanent}
+                        onChange={(e) => setIsPermanent(e.target.checked)}
+                        style={{ accentColor: 'var(--accent-purple)', cursor: 'pointer' }}
+                      />
+                      <span>Keep room permanent</span>
+                    </label>
                   </div>
                 ) : (
                   <button

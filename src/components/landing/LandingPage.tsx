@@ -21,7 +21,13 @@ import { subscribeToActivePartyStats, type LivePartyStats } from '@/services/fir
 interface LandingPageProps {
   userName: string
   onSaveName: (name: string) => void
-  onHostParty: (streamUrl?: string, title?: string, customRoomId?: string, posterUrl?: string) => void
+  onHostParty: (
+    streamUrl?: string,
+    title?: string,
+    customRoomId?: string,
+    posterUrl?: string,
+    isPermanent?: boolean
+  ) => void
   onJoinParty: (roomId: string) => void
 }
 
@@ -117,6 +123,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const [joinCode, setJoinCode] = useState<string>('')
   const [partyName, setPartyName] = useState<string>('')
   const [customSlug, setCustomSlug] = useState<string>('')
+  const [isPermanent, setIsPermanent] = useState<boolean>(false)
   const [showAdvancedSlug, setShowAdvancedSlug] = useState<boolean>(false)
   const [liveStats, setLiveStats] = useState<LivePartyStats>({ activeRooms: 0, activeViewers: 0 })
 
@@ -134,7 +141,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     onHostParty(
       undefined,
       partyName.trim() || 'My Watch Party',
-      sanitizedSlug || undefined
+      sanitizedSlug || undefined,
+      undefined,
+      isPermanent
     )
   }
 
@@ -507,6 +516,26 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                           marginTop: '0.25rem',
                         }}
                       />
+                      <label
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                          marginTop: '0.55rem',
+                          cursor: 'pointer',
+                          fontSize: '0.78rem',
+                          color: isPermanent ? '#fbbf24' : 'var(--text-muted)',
+                          fontWeight: 500,
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isPermanent}
+                          onChange={(e) => setIsPermanent(e.target.checked)}
+                          style={{ accentColor: '#ea383e', cursor: 'pointer' }}
+                        />
+                        <span>Keep this room permanent (persistent link)</span>
+                      </label>
                     </div>
                   ) : (
                     <button

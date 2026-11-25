@@ -79,6 +79,7 @@ export interface RoomMetadata {
   maxCapacity?: number // default 10, max 15
   isLocked?: boolean
   passcode?: string
+  isPermanent?: boolean
 }
 
 export interface PartyPacket<T = unknown> {
