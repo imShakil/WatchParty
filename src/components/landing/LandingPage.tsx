@@ -19,6 +19,7 @@ import {
 import { subscribeToActivePartyStats, type LivePartyStats } from '@/services/firebaseService'
 import { useRoomIdEligibility } from '@/hooks/useRoomIdEligibility'
 import { sanitizeRoomIdInput } from '@/utils/roomValidation'
+import { PartyNativeBanner, PartyLandingPopunder } from '@/components/ads/PartyAds'
 
 interface LandingPageProps {
   userName: string
@@ -181,6 +182,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         position: 'relative',
       }}
     >
+      <PartyLandingPopunder />
       {/* Top Navbar */}
       <nav className="landing-nav">
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -711,6 +713,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           zIndex: 1,
         }}
       >
+        {/* Native Sponsored Banner */}
+        <PartyNativeBanner />
+
         <div
           style={{
             display: 'flex',
@@ -1120,31 +1125,72 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </div>
       </section>
 
-      {/* Footer */}
+      {/* Compact Footer */}
       <footer
         style={{
           marginTop: 'auto',
-          padding: '2rem 1.5rem',
+          padding: '1.15rem 1.5rem',
           borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-          textAlign: 'center',
-          fontSize: '0.8rem',
+          fontSize: '0.78rem',
           color: 'var(--text-dim)',
           background: 'rgba(10, 12, 18, 0.95)',
           position: 'relative',
           zIndex: 1,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-          <img
-            src="/uploads/dekho-prime-icon-header-128.webp"
-            alt="Dekho Prime"
-            style={{ width: '18px', height: '18px', objectFit: 'contain' }}
-          />
-          <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>DekhoPrime Party</span>
-          <span>•</span>
-          <span>Part of the <a href="https://dekhoprime.live" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>Dekho Prime</a> ecosystem</span>
+        <div
+          style={{
+            maxWidth: '1200px',
+            margin: '0 auto',
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '0.85rem',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <img
+              src="/uploads/dekho-prime-icon-header-128.webp"
+              alt="Dekho Prime"
+              style={{ width: '16px', height: '16px', objectFit: 'contain' }}
+            />
+            <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>DekhoPrime Party</span>
+            <span>•</span>
+            <span>
+              <a href="https://dekhoprime.live" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>
+                Dekho Prime
+              </a>{' '}
+              © {new Date().getFullYear()}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+              Free forever • Ads cover domain &amp; hosting
+            </span>
+            <a
+              href="https://beta.publishers.adsterra.com/referral/1XU1UuDLQw"
+              target="_blank"
+              rel="nofollow noopener noreferrer"
+              style={{
+                display: 'inline-block',
+                borderRadius: '4px',
+                overflow: 'hidden',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
+                flexShrink: 0,
+              }}
+            >
+              <img
+                alt="Adsterra"
+                src="https://landings-cdn.adsterratech.com/referralBanners/gif/120x60_adsterra_reff.gif"
+                width={96}
+                height={48}
+                style={{ display: 'block', objectFit: 'cover' }}
+              />
+            </a>
+          </div>
         </div>
-        <p>© {new Date().getFullYear()} Dekho Prime. Real-time synchronized watch party.</p>
       </footer>
     </div>
   )

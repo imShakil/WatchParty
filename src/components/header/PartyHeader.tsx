@@ -1,5 +1,6 @@
 import React from 'react'
-import { Share2, Film, UserCheck, Shield, Tv, LogOut } from 'lucide-react'
+import { Share2, Film, UserCheck, Shield, Tv, LogOut, Heart } from 'lucide-react'
+import { SMARTLINK_URL } from '@/components/ads/PartyAds'
 
 interface PartyHeaderProps {
   roomTitle: string
@@ -138,6 +139,24 @@ export const PartyHeader: React.FC<PartyHeaderProps> = ({
             <Film size={15} />
           </button>
         )}
+
+        {/* Support Us (Smartlink) */}
+        <a
+          href={SMARTLINK_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn-action"
+          style={{
+            textDecoration: 'none',
+            background: 'rgba(236, 72, 153, 0.12)',
+            borderColor: 'rgba(236, 72, 153, 0.35)',
+            color: '#f472b6',
+          }}
+          title="Support DekhoPrime Watch Party"
+        >
+          <Heart size={14} fill="currentColor" />
+          <span className="hide-on-mobile">Support Us</span>
+        </a>
 
         {/* Invite Friends Button */}
         <button onClick={onOpenInvite} className="btn-action btn-primary">

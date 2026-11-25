@@ -14,6 +14,7 @@ import { LandingPage } from '@/components/landing/LandingPage'
 import { parseCurrentRoute, syncRoomUrl, cleanSensitiveUrlParams } from '@/utils/routeUtils'
 import { getHostSession } from '@/utils/sessionUtils'
 import { checkPartyRoomStatus, consumeLaunchToken } from '@/services/firebaseService'
+import { PartySocialBar, PartyPlayerCornerAd } from '@/components/ads/PartyAds'
 
 export function App() {
   const {
@@ -201,17 +202,21 @@ export function App() {
 
   if (isLandingView) {
     return (
-      <LandingPage
-        userName={userName}
-        onSaveName={updateUserName}
-        onHostParty={handleHostParty}
-        onJoinParty={handleJoinParty}
-      />
+      <>
+        <PartySocialBar />
+        <LandingPage
+          userName={userName}
+          onSaveName={updateUserName}
+          onHostParty={handleHostParty}
+          onJoinParty={handleJoinParty}
+        />
+      </>
     )
   }
 
   return (
     <div className="app-container">
+      <PartySocialBar />
       {/* Top Header */}
       <PartyHeader
         roomTitle={roomMetadata.roomTitle}
@@ -260,6 +265,9 @@ export function App() {
 
           {/* Floating Emoji Reactions Layer */}
           <FloatingReactions reactions={reactions} />
+
+          {/* Timed 15s Corner Ad Overlay */}
+          <PartyPlayerCornerAd isActive={connectionStatus === 'connected'} />
 
           {/* Host Reconnecting Grace Period Banner */}
           {isHostReconnecting && (
