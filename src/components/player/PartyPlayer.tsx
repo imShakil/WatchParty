@@ -1,7 +1,12 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import Hls from 'hls.js'
+import * as dashjs from 'dashjs'
 import { parseMediaUrl, withStartAtParam } from '@/utils/mediaUrl'
 import { YouTubePlayer, type YouTubePlaylistState } from '@/components/player/YouTubePlayer'
+import { VimeoPlayer } from '@/components/player/VimeoPlayer'
+import { TwitchPlayer } from '@/components/player/TwitchPlayer'
+import { DailymotionPlayer } from '@/components/player/DailymotionPlayer'
+import { SoundCloudPlayer } from '@/components/player/SoundCloudPlayer'
 import {
   fetchYouTubePlaylist,
   buildFallbackPlaylistItems,
@@ -38,6 +43,7 @@ interface PartyPlayerProps {
   isHostOnlyControl: boolean
   isP2PStream?: boolean
   remoteStream?: MediaStream | null
+  localTabStream?: MediaStream | null
   embedStartAt?: number
   embedSyncNonce?: number
   embedClockTime?: number
@@ -75,6 +81,7 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
   isHostOnlyControl,
   isP2PStream,
   remoteStream,
+  localTabStream,
   embedStartAt = 0,
   embedSyncNonce = 0,
   embedClockTime = 0,
@@ -104,6 +111,7 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
   const [showControls, setShowControls] = useState<boolean>(true)
   const hideControlsTimer = useRef<number | null>(null)
   const guestVideoRef = useRef<HTMLVideoElement | null>(null)
+  const hostTabVideoRef = useRef<HTMLVideoElement | null>(null)
   const embedIframeRef = useRef<HTMLIFrameElement | null>(null)
   const [guestEmbedTime, setGuestEmbedTime] = useState<number>(0)
   const lastAutoSeekRef = useRef<number>(0)
@@ -115,12 +123,37 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
     }
   }, [remoteStream])
 
+  useEffect(() => {
+    if (hostTabVideoRef.current && localTabStream) {
+      hostTabVideoRef.current.srcObject = localTabStream
+      hostTabVideoRef.current.play().catch(() => {})
+    }
+  }, [localTabStream])
+
   const parsedMedia = useMemo(
     () => parseMediaUrl(streamUrl, undefined, sourceType),
     [streamUrl, sourceType]
   )
-  const { normalizedUrl, isEmbed, isYouTube, youtubeId, youtubePlaylistId, youtubePlaylistIndex } =
-    parsedMedia
+  const {
+    normalizedUrl,
+    isEmbed,
+    isYouTube,
+    youtubeId,
+    youtubePlaylistId,
+    youtubePlaylistIndex,
+    vimeoId,
+    twitchChannel,
+    twitchVideoId,
+    dailymotionId,
+    soundcloudUrl,
+    mediaType,
+  } = parsedMedia
+  const isCustomPlatformPlayer =
+    isYouTube ||
+    mediaType === 'vimeo' ||
+    mediaType === 'twitch' ||
+    mediaType === 'dailymotion' ||
+    mediaType === 'soundcloud'
   const isTabShareHost = isHost && isP2PStream && streamUrl.startsWith('p2p://tab-share')
 
   const [playlistData, setPlaylistData] = useState<{
@@ -271,14 +304,18 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
 
   const canControl = !isHostOnlyControl || isHost
 
-  // Setup HLS / Stream playback
+  // Setup HLS / DASH / Direct Stream playback
   useEffect(() => {
     const video = videoRef.current
-    if (!video || !normalizedUrl || isEmbed || isYouTube) return
+    if (!video || !normalizedUrl || isEmbed || isCustomPlatformPlayer) return
 
     let hls: Hls | null = null
+    let dashPlayer: dashjs.MediaPlayerClass | null = null
 
-    if (normalizedUrl.includes('.m3u8') && Hls.isSupported()) {
+    if (mediaType === 'dash' || normalizedUrl.toLowerCase().includes('.mpd')) {
+      dashPlayer = dashjs.MediaPlayer().create()
+      dashPlayer.initialize(video, normalizedUrl, false)
+    } else if (normalizedUrl.includes('.m3u8') && Hls.isSupported()) {
       hls = new Hls({
         enableWorker: true,
         lowLatencyMode: true,
@@ -311,8 +348,11 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
       if (hls) {
         hls.destroy()
       }
+      if (dashPlayer) {
+        dashPlayer.reset()
+      }
     }
-  }, [normalizedUrl, isEmbed, isYouTube, videoRef])
+  }, [normalizedUrl, isEmbed, isCustomPlatformPlayer, mediaType, videoRef])
 
   // Video event listeners
   useEffect(() => {
@@ -382,7 +422,17 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
       video.removeEventListener('playing', handleCanPlay)
       video.removeEventListener('canplay', handleCanPlay)
     }
-  }, [videoRef, onBuffering, isHost, isP2PStream, onBroadcastLocalStream])
+  }, [
+    videoRef,
+    normalizedUrl,
+    isEmbed,
+    isCustomPlatformPlayer,
+    isTabShareHost,
+    onBuffering,
+    isHost,
+    isP2PStream,
+    onBroadcastLocalStream,
+  ])
 
   // Controls Visibility management
   const triggerUserActivity = useCallback(() => {
@@ -415,9 +465,16 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
     if (!video) return
 
     if (video.paused) {
-      video.play().then(onPlay).catch(() => {})
+      video
+        .play()
+        .then(() => {
+          setIsPlaying(true)
+          onPlay()
+        })
+        .catch(() => {})
     } else {
       video.pause()
+      setIsPlaying(false)
       onPause()
     }
   }
@@ -1005,7 +1062,121 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
           {centerControlsOverlay}
           {customControlsOverlay}
         </div>
+      ) : mediaType === 'vimeo' && vimeoId ? (
+        <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+          <VimeoPlayer
+            videoId={vimeoId}
+            canControl={canControl}
+            onPlay={handleYouTubePlay}
+            onPause={handleYouTubePause}
+            onBuffering={onBuffering}
+            onTimeUpdate={handleYouTubeTimeUpdate}
+            controllerRef={controllerRef}
+          />
+          {!canControl && <div style={{ position: 'absolute', inset: 0, zIndex: 12 }} />}
+        </div>
+      ) : mediaType === 'twitch' && (twitchChannel || twitchVideoId) ? (
+        <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+          <TwitchPlayer
+            channel={twitchChannel}
+            videoId={twitchVideoId}
+            onPlay={handleYouTubePlay}
+            onPause={handleYouTubePause}
+            onBuffering={onBuffering}
+            onTimeUpdate={handleYouTubeTimeUpdate}
+            controllerRef={controllerRef}
+          />
+          {!canControl && <div style={{ position: 'absolute', inset: 0, zIndex: 12 }} />}
+        </div>
+      ) : mediaType === 'dailymotion' && dailymotionId ? (
+        <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+          <DailymotionPlayer
+            videoId={dailymotionId}
+            canControl={canControl}
+            onPlay={handleYouTubePlay}
+            onPause={handleYouTubePause}
+            onBuffering={onBuffering}
+            onTimeUpdate={handleYouTubeTimeUpdate}
+            controllerRef={controllerRef}
+          />
+          {!canControl && <div style={{ position: 'absolute', inset: 0, zIndex: 12 }} />}
+        </div>
+      ) : mediaType === 'soundcloud' && soundcloudUrl ? (
+        <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+          <SoundCloudPlayer
+            trackUrl={soundcloudUrl}
+            onPlay={handleYouTubePlay}
+            onPause={handleYouTubePause}
+            onBuffering={onBuffering}
+            onTimeUpdate={handleYouTubeTimeUpdate}
+            controllerRef={controllerRef}
+          />
+          {!canControl && <div style={{ position: 'absolute', inset: 0, zIndex: 12 }} />}
+        </div>
       ) : isTabShareHost ? (
+        localTabStream ? (
+          <div style={{ width: '100%', height: '100%', position: 'relative', background: '#000' }}>
+            <video
+              ref={hostTabVideoRef}
+              autoPlay
+              playsInline
+              muted
+              style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }}
+            />
+            <div
+              style={{
+                position: 'absolute',
+                top: '0.75rem',
+                right: '0.75rem',
+                zIndex: 25,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                padding: '0.35rem 0.65rem',
+                borderRadius: '999px',
+                background: 'rgba(10, 12, 18, 0.85)',
+                backdropFilter: 'blur(10px)',
+                border: '1px solid rgba(139, 92, 246, 0.35)',
+                boxShadow: '0 6px 20px rgba(0, 0, 0, 0.5)',
+              }}
+            >
+              <span
+                style={{
+                  width: '7px',
+                  height: '7px',
+                  borderRadius: '50%',
+                  background: '#ef4444',
+                  boxShadow: '0 0 8px #ef4444',
+                }}
+              />
+              <span style={{ fontSize: '0.74rem', fontWeight: 600, color: '#e2e8f0' }}>
+                Live Tab Preview (Muted)
+              </span>
+              {onStopTabShare && (
+                <button
+                  type="button"
+                  onClick={onStopTabShare}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.3rem',
+                    padding: '0.22rem 0.55rem',
+                    borderRadius: '999px',
+                    background: 'rgba(239, 68, 68, 0.2)',
+                    border: '1px solid rgba(239, 68, 68, 0.45)',
+                    color: '#fca5a5',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Square size={10} fill="currentColor" />
+                  <span>Stop</span>
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
         <div
           style={{
             width: '100%',
@@ -1066,6 +1237,7 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
             )}
           </div>
         </div>
+        )
       ) : isP2PStream && !isHost ? (
         <div style={{ width: '100%', height: '100%', position: 'relative' }}>
           {remoteStream ? (

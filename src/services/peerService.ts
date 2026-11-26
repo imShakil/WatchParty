@@ -64,16 +64,19 @@ export class PeerService {
       })
 
       peerInstance.on('error', (err) => {
-        // If ID is temporarily locked on page reload, retry once after a short delay
+        // If ID is temporarily locked on page reload/tab close, retry until PeerJS releases it
         if (err.type === 'unavailable-id' && roomId) {
-          if (retryCount < 2) {
+          const maxRetries = strictCustomId ? 6 : 2
+          if (retryCount < maxRetries) {
             setTimeout(() => {
               this.initHost(roomId, retryCount + 1, strictCustomId).then(resolve).catch(reject)
-            }, 1200)
+            }, 1500)
             return
           }
           if (strictCustomId) {
-            const collisionErr = new Error('Room ID is already in use by another active host.')
+            const collisionErr = new Error(
+              'Previous session is still closing on the server. Please wait a few seconds and try again.'
+            )
             this.notifyStatus('error', collisionErr.message)
             reject(collisionErr)
             return

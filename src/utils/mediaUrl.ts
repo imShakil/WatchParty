@@ -1,7 +1,17 @@
 /**
  * Utility to parse and normalize video streams, YouTube URLs, and local media.
  */
-export type MediaType = 'hls' | 'youtube' | 'direct' | 'embed' | 'local'
+export type MediaType =
+  | 'hls'
+  | 'dash'
+  | 'youtube'
+  | 'vimeo'
+  | 'twitch'
+  | 'dailymotion'
+  | 'soundcloud'
+  | 'direct'
+  | 'embed'
+  | 'local'
 
 export interface ParsedMedia {
   normalizedUrl: string
@@ -10,8 +20,46 @@ export interface ParsedMedia {
   youtubeId?: string
   youtubePlaylistId?: string
   youtubePlaylistIndex?: number
+  vimeoId?: string
+  twitchChannel?: string
+  twitchVideoId?: string
+  dailymotionId?: string
+  soundcloudUrl?: string
   mediaType: MediaType
   title?: string
+}
+
+const TWITCH_RESERVED_PATHS = new Set([
+  'directory',
+  'downloads',
+  'jobs',
+  'p',
+  'settings',
+  'subscriptions',
+  'turbo',
+  'videos',
+])
+
+function normalizeCloudDriveUrl(rawUrl: string): string | null {
+  try {
+    const parsed = new URL(rawUrl)
+    const host = parsed.hostname.toLowerCase()
+    if (host === 'drive.google.com') {
+      const fileMatch = parsed.pathname.match(/\/file\/d\/([\w-]+)/)
+      const id = fileMatch?.[1] || parsed.searchParams.get('id')
+      if (id) {
+        return `https://drive.google.com/uc?export=download&id=${encodeURIComponent(id)}`
+      }
+    }
+    if (host.endsWith('dropbox.com')) {
+      parsed.searchParams.delete('dl')
+      parsed.searchParams.set('raw', '1')
+      return parsed.toString()
+    }
+  } catch {
+    // Non-URL input
+  }
+  return null
 }
 
 function extractYouTubeParams(rawUrl: string): {
@@ -109,14 +157,101 @@ export function parseMediaUrl(
     }
   }
 
-  // 2. HLS stream detection
-  if (explicitType === 'hls' || url.includes('.m3u8')) {
+  // 2. Vimeo Detection
+  const vimeoMatch = url.match(
+    /(?:player\.)?vimeo\.com\/(?:channels\/[^/]+\/|groups\/[^/]+\/videos\/|video\/)?(\d+)/
+  )
+  if (vimeoMatch?.[1]) {
+    const vimeoId = vimeoMatch[1]
+    return {
+      normalizedUrl: `https://player.vimeo.com/video/${vimeoId}`,
+      isEmbed: false,
+      isYouTube: false,
+      vimeoId,
+      mediaType: 'vimeo',
+      title: defaultTitle || 'Vimeo Video',
+    }
+  }
+
+  // 3. Twitch Detection (VODs and Live Channels)
+  const twitchVodMatch = url.match(/twitch\.tv\/videos\/(\d+)/i)
+  if (twitchVodMatch?.[1]) {
+    return {
+      normalizedUrl: url,
+      isEmbed: false,
+      isYouTube: false,
+      twitchVideoId: twitchVodMatch[1],
+      mediaType: 'twitch',
+      title: defaultTitle || 'Twitch VOD',
+    }
+  }
+  const twitchChannelMatch = url.match(/(?:www\.|m\.)?twitch\.tv\/([a-zA-Z0-9_]{2,25})(?:$|[/?#])/i)
+  if (twitchChannelMatch?.[1] && !TWITCH_RESERVED_PATHS.has(twitchChannelMatch[1].toLowerCase())) {
+    return {
+      normalizedUrl: url,
+      isEmbed: false,
+      isYouTube: false,
+      twitchChannel: twitchChannelMatch[1],
+      mediaType: 'twitch',
+      title: defaultTitle || `${twitchChannelMatch[1]} (Twitch)`,
+    }
+  }
+
+  // 4. Dailymotion Detection
+  const dmMatch = url.match(/(?:dailymotion\.com\/(?:video|embed\/video)|dai\.ly)\/([a-zA-Z0-9]+)/i)
+  if (dmMatch?.[1]) {
+    return {
+      normalizedUrl: `https://geo.dailymotion.com/player.html?video=${encodeURIComponent(dmMatch[1])}`,
+      isEmbed: false,
+      isYouTube: false,
+      dailymotionId: dmMatch[1],
+      mediaType: 'dailymotion',
+      title: defaultTitle || 'Dailymotion Video',
+    }
+  }
+
+  // 5. SoundCloud Detection
+  if (/^https?:\/\/(?:www\.|m\.)?soundcloud\.com\/[^/]+\/[^/?#]+/i.test(url)) {
+    return {
+      normalizedUrl: url,
+      isEmbed: false,
+      isYouTube: false,
+      soundcloudUrl: url,
+      mediaType: 'soundcloud',
+      title: defaultTitle || 'SoundCloud Audio',
+    }
+  }
+
+  // 6. Google Drive / Dropbox Direct Video Normalization
+  const cloudDirectUrl = normalizeCloudDriveUrl(url)
+  if (cloudDirectUrl) {
+    return {
+      normalizedUrl: cloudDirectUrl,
+      isEmbed: false,
+      isYouTube: false,
+      mediaType: 'direct',
+      title: defaultTitle || 'Cloud Video',
+    }
+  }
+
+  // 7. HLS & MPEG-DASH stream detection
+  if (explicitType === 'hls' || url.toLowerCase().includes('.m3u8')) {
     return {
       normalizedUrl: url,
       isEmbed: false,
       isYouTube: false,
       mediaType: 'hls',
       title: defaultTitle || 'Live HLS Stream',
+    }
+  }
+
+  if (explicitType === 'dash' || url.toLowerCase().includes('.mpd')) {
+    return {
+      normalizedUrl: url,
+      isEmbed: false,
+      isYouTube: false,
+      mediaType: 'dash',
+      title: defaultTitle || 'DASH Stream',
     }
   }
 

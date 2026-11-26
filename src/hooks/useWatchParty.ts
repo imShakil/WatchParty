@@ -962,11 +962,10 @@ export function useWatchParty() {
             return
           }
           const hasOwnership = Boolean(getHostSession(cleanCustomId))
-          const allowOwnedActive = hasOwnership || Boolean(initialMeta?.isPermanent)
           const eligibility = await checkRoomIdEligibility(
             cleanCustomId,
             hasOwnership,
-            allowOwnedActive
+            true
           )
           if (!eligibility.eligible) {
             setConnectionStatus('error')
@@ -1343,7 +1342,9 @@ export function useWatchParty() {
         e.preventDefault()
         e.returnValue = ''
       }
+    }
 
+    const handlePageHide = () => {
       if (!isHost && peerService.myPeerId) {
         peerService.send({
           type: 'PEER_LEFT',
@@ -1354,10 +1355,14 @@ export function useWatchParty() {
       } else if (isHost && roomIdRef.current && isIntentionalExit.current) {
         void endPartyRoom(roomIdRef.current, isPermanentRef.current)
       }
+      peerService.cleanup()
     }
+
     window.addEventListener('beforeunload', handleBeforeUnload)
+    window.addEventListener('pagehide', handlePageHide)
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload)
+      window.removeEventListener('pagehide', handlePageHide)
     }
   }, [isHost, userName, participants.length])
 

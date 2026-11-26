@@ -182,6 +182,7 @@ export function App() {
 
   const preTabShareMetaRef = useRef<{ url: string; title: string } | null>(null)
   const activeTabStreamRef = useRef<MediaStream | null>(null)
+  const [localTabStream, setLocalTabStream] = useState<MediaStream | null>(null)
 
   const handleStopTabShare = () => {
     if (activeTabStreamRef.current) {
@@ -190,12 +191,37 @@ export function App() {
       }
       activeTabStreamRef.current = null
     }
+    setLocalTabStream(null)
     stopLocalStream()
     const prev = preTabShareMetaRef.current
     if (prev && prev.url && !prev.url.startsWith('p2p://')) {
       changeStream(prev.url, prev.title, undefined, false)
     }
     preTabShareMetaRef.current = null
+  }
+
+  const handleStartTabShare = async () => {
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      throw new Error('Browser tab sharing is not supported on this device/browser.')
+    }
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+      video: true,
+      audio: true,
+    })
+    if (roomMetadata.streamUrl && !roomMetadata.streamUrl.startsWith('p2p://')) {
+      preTabShareMetaRef.current = {
+        url: roomMetadata.streamUrl,
+        title: roomMetadata.roomTitle,
+      }
+    }
+    activeTabStreamRef.current = stream
+    setLocalTabStream(stream)
+    const videoTrack = stream.getVideoTracks()[0]
+    if (videoTrack) {
+      videoTrack.onended = () => handleStopTabShare()
+    }
+    broadcastLocalStream(stream)
+    changeStream('p2p://tab-share', 'Live Browser Tab Share', undefined, true)
   }
 
   const handleJoinParty = (targetRoomId: string) => {
@@ -278,6 +304,7 @@ export function App() {
             isHostOnlyControl={roomMetadata.isHostOnlyControl}
             isP2PStream={roomMetadata.isP2PStream}
             remoteStream={remoteStream}
+            localTabStream={localTabStream}
             embedStartAt={embedStartAt}
             embedSyncNonce={embedSyncNonce}
             embedClockTime={embedClockTime}
@@ -446,6 +473,7 @@ export function App() {
         currentTitle={roomMetadata.roomTitle}
         onClose={() => setIsStreamModalOpen(false)}
         onSaveStream={(url, title, isP2P) => changeStream(url, title, undefined, isP2P)}
+        onStartTabShare={handleStartTabShare}
       />
 
       {/* Change Name Modal */}

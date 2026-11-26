@@ -22,6 +22,7 @@ import {
   where,
   onSnapshot,
   serverTimestamp,
+  increment,
   type Firestore,
 } from 'firebase/firestore'
 
@@ -184,12 +185,15 @@ export async function checkRoomIdEligibility(
   hasLocalHostOwnership: boolean,
   allowOwnedActive = false
 ): Promise<{ eligible: boolean; reason?: string; isOwnedPermanent?: boolean }> {
-  const { firestore } = getFirebase()
+  const { firestore, auth } = getFirebase()
   if (!firestore || !roomId) {
     return { eligible: true }
   }
 
   try {
+    if (auth?.authStateReady) {
+      await auth.authStateReady()
+    }
     const roomRef = doc(firestore, 'party_rooms', roomId)
     const snap = await getDoc(roomRef)
     if (!snap.exists()) {
@@ -203,10 +207,10 @@ export async function checkRoomIdEligibility(
     const isStale = now - lastActive > STALE_ROOM_THRESHOLD_MS
     const isActive = data.status === 'active' && !isStale
     const isPermanent = Boolean(data.isPermanent)
-    const currentUid = getCurrentUserUid()
-    const isOwner = data.ownerUid
-      ? Boolean(currentUid && data.ownerUid === currentUid)
-      : hasLocalHostOwnership
+    const currentUid = auth?.currentUser?.uid || getCurrentUserUid()
+    const isOwner =
+      Boolean(currentUid && data.ownerUid && data.ownerUid === currentUid) ||
+      hasLocalHostOwnership
 
     if (isActive && !(allowOwnedActive && isOwner)) {
       return {
@@ -232,6 +236,41 @@ export async function checkRoomIdEligibility(
   }
 }
 
+const GLOBAL_STATS_DOC_ID = 'global-stats'
+
+async function ensureAndIncrementTotalRooms(shouldIncrement: boolean): Promise<void> {
+  const { firestore } = getFirebase()
+  if (!firestore) return
+
+  try {
+    const statsRef = doc(firestore, 'party_rooms', GLOBAL_STATS_DOC_ID)
+    const statsSnap = await getDoc(statsRef)
+    if (!statsSnap.exists()) {
+      const roomsSnap = await getDocs(collection(firestore, 'party_rooms'))
+      let baseline = 0
+      roomsSnap.forEach((d) => {
+        if (d.id !== GLOBAL_STATS_DOC_ID) baseline += 1
+      })
+      await setDoc(
+        statsRef,
+        {
+          status: 'stats',
+          totalRoomsCreated: baseline + (shouldIncrement ? 1 : 0),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      )
+    } else if (shouldIncrement) {
+      await updateDoc(statsRef, {
+        totalRoomsCreated: increment(1),
+        updatedAt: serverTimestamp(),
+      })
+    }
+  } catch {
+    // Non-fatal
+  }
+}
+
 /**
  * Register newly created watch party room in Firestore
  */
@@ -250,10 +289,11 @@ export async function registerPartyRoom(
   }
 ): Promise<void> {
   const { firestore } = getFirebase()
-  if (!firestore || !roomId) return
+  if (!firestore || !roomId || roomId === GLOBAL_STATS_DOC_ID) return
 
   try {
     const roomRef = doc(firestore, 'party_rooms', roomId)
+    const existingSnap = await getDoc(roomRef)
     const resolvedOwnerUid = data.ownerUid || getCurrentUserUid() || undefined
     await setDoc(
       roomRef,
@@ -275,6 +315,9 @@ export async function registerPartyRoom(
       },
       { merge: true }
     )
+    if (!existingSnap.exists()) {
+      void ensureAndIncrementTotalRooms(true)
+    }
   } catch (err) {
     console.warn('[DekhoParty] Firestore register room skipped:', err)
   }
@@ -563,25 +606,39 @@ export async function endPartyRoom(roomId: string, isPermanent?: boolean): Promi
 export interface LivePartyStats {
   activeRooms: number
   activeViewers: number
+  totalRoomsCreated: number
 }
 
 /**
- * Subscribe to real-time active watch parties and viewer count for landing page badge
+ * Subscribe to real-time active watch parties, viewer count, and monotonic total rooms created
  */
 export function subscribeToActivePartyStats(
   callback: (stats: LivePartyStats) => void
 ): () => void {
   const { firestore } = getFirebase()
   if (!firestore) {
-    callback({ activeRooms: 0, activeViewers: 0 })
+    callback({ activeRooms: 0, activeViewers: 0, totalRoomsCreated: 0 })
     return () => {}
+  }
+
+  let latestActiveRooms = 0
+  let latestActiveViewers = 0
+  let latestTotalCreated = 0
+
+  const emit = () => {
+    callback({
+      activeRooms: latestActiveRooms,
+      activeViewers: latestActiveViewers,
+      totalRoomsCreated: latestTotalCreated,
+    })
   }
 
   try {
     const roomsCol = collection(firestore, 'party_rooms')
     const activeQuery = query(roomsCol, where('status', '==', 'active'))
+    const statsRef = doc(firestore, 'party_rooms', GLOBAL_STATS_DOC_ID)
 
-    const unsubscribe = onSnapshot(
+    const unsubActive = onSnapshot(
       activeQuery,
       (snapshot) => {
         let totalViewers = 0
@@ -616,20 +673,38 @@ export function subscribeToActivePartyStats(
           }
         })
 
-        callback({
-          activeRooms: validRooms,
-          activeViewers: totalViewers,
-        })
+        latestActiveRooms = validRooms
+        latestActiveViewers = totalViewers
+        emit()
       },
       () => {
-        // Fallback on permission or network error
-        callback({ activeRooms: 0, activeViewers: 0 })
+        latestActiveRooms = 0
+        latestActiveViewers = 0
+        emit()
       }
     )
 
-    return unsubscribe
+    const unsubTotal = onSnapshot(
+      statsRef,
+      (snap) => {
+        if (!snap.exists()) {
+          void ensureAndIncrementTotalRooms(false)
+          return
+        }
+        latestTotalCreated = Number(snap.data()?.totalRoomsCreated) || 0
+        emit()
+      },
+      () => {
+        // Non-fatal
+      }
+    )
+
+    return () => {
+      unsubActive()
+      unsubTotal()
+    }
   } catch {
-    callback({ activeRooms: 0, activeViewers: 0 })
+    callback({ activeRooms: 0, activeViewers: 0, totalRoomsCreated: 0 })
     return () => {}
   }
 }

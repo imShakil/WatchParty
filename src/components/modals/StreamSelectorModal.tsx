@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react'
-import { X, Film, PlayCircle, Sparkles, Upload, Link2, HardDrive } from 'lucide-react'
+import { X, Film, PlayCircle, Radio, Upload, Link2, HardDrive, MonitorUp } from 'lucide-react'
 
 interface StreamSelectorModalProps {
   isOpen: boolean
@@ -7,6 +7,7 @@ interface StreamSelectorModalProps {
   currentTitle: string
   onClose: () => void
   onSaveStream: (url: string, title: string, isP2P?: boolean) => void
+  onStartTabShare?: () => Promise<void> | void
 }
 
 const PRESET_STREAMS = [
@@ -38,11 +39,13 @@ export const StreamSelectorModal: React.FC<StreamSelectorModalProps> = ({
   currentTitle,
   onClose,
   onSaveStream,
+  onStartTabShare,
 }) => {
-  const [activeTab, setActiveTab] = useState<'url' | 'local'>('url')
+  const [activeTab, setActiveTab] = useState<'url' | 'local' | 'tab'>('url')
   const [streamUrl, setStreamUrl] = useState<string>(currentUrl)
   const [title, setTitle] = useState<string>(currentTitle)
   const [selectedFileName, setSelectedFileName] = useState<string>('')
+  const [tabShareError, setTabShareError] = useState<string>('')
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   if (!isOpen) return null
@@ -163,11 +166,33 @@ export const StreamSelectorModal: React.FC<StreamSelectorModalProps> = ({
             }}
           >
             <HardDrive size={15} />
-            <span>Local Video File</span>
+            <span>Local File</span>
           </button>
+          {onStartTabShare && (
+            <button
+              type="button"
+              onClick={() => {
+                setTabShareError('')
+                setActiveTab('tab')
+              }}
+              className="btn-action"
+              style={{
+                flex: 1,
+                justifyContent: 'center',
+                background: activeTab === 'tab' ? 'var(--bg-surface)' : 'transparent',
+                color: activeTab === 'tab' ? 'var(--text-main)' : 'var(--text-dim)',
+                border: activeTab === 'tab' ? '1px solid var(--border-subtle)' : 'none',
+                padding: '0.5rem',
+                fontSize: '0.85rem',
+              }}
+            >
+              <MonitorUp size={15} />
+              <span>Share Tab</span>
+            </button>
+          )}
         </div>
 
-        {activeTab === 'url' ? (
+        {activeTab === 'url' && (
           <>
             {/* Preset Streams */}
             <div>
@@ -235,13 +260,13 @@ export const StreamSelectorModal: React.FC<StreamSelectorModalProps> = ({
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                 <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>
-                  Video URL (YouTube, HLS .m3u8, MP4, WebM)
+                  Media URL (YouTube, Vimeo, Twitch, Dailymotion, SoundCloud, Drive, HLS/DASH, MP4)
                 </label>
                 <input
                   type="text"
                   value={streamUrl}
                   onChange={(e) => setStreamUrl(e.target.value)}
-                  placeholder="https://youtube.com/watch?v=... or https://.../stream.m3u8"
+                  placeholder="https://youtube.com/... or vimeo.com/... or twitch.tv/..."
                   style={{
                     padding: '0.65rem 0.85rem',
                     borderRadius: 'var(--radius-md)',
@@ -261,11 +286,13 @@ export const StreamSelectorModal: React.FC<StreamSelectorModalProps> = ({
                 style={{ width: '100%', justifyContent: 'center', padding: '0.75rem' }}
               >
                 <span>Load Stream into Party</span>
-                <Sparkles size={16} />
+                <PlayCircle size={16} />
               </button>
             </form>
           </>
-        ) : (
+        )}
+
+        {activeTab === 'local' && (
           /* Local File Mode */
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div
@@ -328,7 +355,7 @@ export const StreamSelectorModal: React.FC<StreamSelectorModalProps> = ({
                 color: '#6ee7b7',
               }}
             >
-              <Sparkles size={16} color="#10b981" />
+              <Radio size={16} color="#10b981" />
               <span>
                 <strong>Live P2P Broadcast:</strong> Plays directly from your device and streams to all party guests in real time via encrypted WebRTC.
               </span>
@@ -366,6 +393,70 @@ export const StreamSelectorModal: React.FC<StreamSelectorModalProps> = ({
             >
               <span>Broadcast Video to Party</span>
               <PlayCircle size={16} />
+            </button>
+          </div>
+        )}
+
+        {activeTab === 'tab' && onStartTabShare && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div
+              style={{
+                border: '1px solid rgba(139, 92, 246, 0.3)',
+                borderRadius: 'var(--radius-lg)',
+                padding: '1.75rem 1.25rem',
+                textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '0.75rem',
+                background: 'rgba(139, 92, 246, 0.08)',
+              }}
+            >
+              <div
+                style={{
+                  width: '48px',
+                  height: '48px',
+                  borderRadius: '50%',
+                  background: 'rgba(139, 92, 246, 0.18)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <MonitorUp size={24} color="#c084fc" />
+              </div>
+              <div>
+                <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                  Stream Any Browser Tab Live
+                </div>
+                <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '0.3rem', lineHeight: 1.5 }}>
+                  Pick a browser tab (like Bilibili, anime sites, or sports) and check <strong>Share tab audio</strong> so everyone watches in real-time WebRTC sync.
+                </div>
+              </div>
+            </div>
+
+            {tabShareError && (
+              <div style={{ fontSize: '0.78rem', color: '#f87171', textAlign: 'center' }}>
+                {tabShareError}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                setTabShareError('')
+                void Promise.resolve(onStartTabShare())
+                  .then(() => onClose())
+                  .catch((err: unknown) => {
+                    const msg = err instanceof Error ? err.message : 'Tab share cancelled or unsupported.'
+                    setTabShareError(msg)
+                  })
+              }}
+              className="btn-action btn-primary"
+              style={{ width: '100%', justifyContent: 'center', padding: '0.75rem' }}
+            >
+              <MonitorUp size={16} />
+              <span>Choose Tab &amp; Start Sharing</span>
             </button>
           </div>
         )}

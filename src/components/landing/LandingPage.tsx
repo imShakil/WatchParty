@@ -18,7 +18,17 @@ import {
   LogOut,
   Pin,
   Trash2,
+  MonitorUp,
 } from 'lucide-react'
+import {
+  YouTubeLogo,
+  VimeoLogo,
+  TwitchLogo,
+  DailymotionLogo,
+  SoundCloudLogo,
+  GoogleDriveLogo,
+  DropboxLogo,
+} from '@/components/landing/PlatformLogos'
 import type { User as FirebaseUser } from 'firebase/auth'
 import {
   subscribeToActivePartyStats,
@@ -144,7 +154,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const [customSlug, setCustomSlug] = useState<string>('')
   const [isPermanent, setIsPermanent] = useState<boolean>(false)
   const [showAdvancedSlug, setShowAdvancedSlug] = useState<boolean>(false)
-  const [liveStats, setLiveStats] = useState<LivePartyStats>({ activeRooms: 0, activeViewers: 0 })
+  const [liveStats, setLiveStats] = useState<LivePartyStats>({
+    activeRooms: 0,
+    activeViewers: 0,
+    totalRoomsCreated: 0,
+  })
   const [myPermanentRooms, setMyPermanentRooms] = useState<PermanentRoomSummary[]>([])
   const slugEligibility = useRoomIdEligibility(customSlug)
 
@@ -407,34 +421,65 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
         {/* Foreground Content */}
         <div style={{ position: 'relative', zIndex: 1 }}>
-          {/* Eyebrow Badge */}
+          {/* Eyebrow Badges */}
           <div
             style={{
-              display: 'inline-flex',
+              display: 'flex',
               alignItems: 'center',
-              gap: '0.5rem',
-              padding: '0.4rem 1rem',
-              borderRadius: 'var(--radius-full)',
-              background: liveStats.activeRooms > 0 ? 'rgba(16, 185, 129, 0.16)' : 'rgba(234, 56, 62, 0.16)',
-              border: liveStats.activeRooms > 0 ? '1px solid rgba(16, 185, 129, 0.35)' : '1px solid rgba(234, 56, 62, 0.35)',
-              fontSize: '0.825rem',
-              color: liveStats.activeRooms > 0 ? '#a7f3d0' : '#fecaca',
-              fontWeight: 600,
+              justifyContent: 'center',
+              flexWrap: 'wrap',
+              gap: '0.6rem',
               marginBottom: '1.25rem',
-              backdropFilter: 'blur(8px)',
-              boxShadow: liveStats.activeRooms > 0 ? '0 4px 16px rgba(16, 185, 129, 0.15)' : '0 4px 16px rgba(234, 56, 62, 0.15)',
             }}
           >
-            {liveStats.activeRooms > 0 ? (
-              <>
-                <span className="status-dot" style={{ backgroundColor: '#10b981', boxShadow: '0 0 8px #10b981' }} />
-                <span>{liveStats.activeRooms} Live {liveStats.activeRooms === 1 ? 'Party' : 'Parties'} • {liveStats.activeViewers} Watching</span>
-              </>
-            ) : (
-              <>
-                <Clapperboard size={14} color="#ea383e" />
-                <span>Watch Movies & Series With Friends</span>
-              </>
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                padding: '0.4rem 1rem',
+                borderRadius: 'var(--radius-full)',
+                background: liveStats.activeRooms > 0 ? 'rgba(16, 185, 129, 0.16)' : 'rgba(234, 56, 62, 0.16)',
+                border: liveStats.activeRooms > 0 ? '1px solid rgba(16, 185, 129, 0.35)' : '1px solid rgba(234, 56, 62, 0.35)',
+                fontSize: '0.825rem',
+                color: liveStats.activeRooms > 0 ? '#a7f3d0' : '#fecaca',
+                fontWeight: 600,
+                backdropFilter: 'blur(8px)',
+                boxShadow: liveStats.activeRooms > 0 ? '0 4px 16px rgba(16, 185, 129, 0.15)' : '0 4px 16px rgba(234, 56, 62, 0.15)',
+              }}
+            >
+              {liveStats.activeRooms > 0 ? (
+                <>
+                  <span className="status-dot" style={{ backgroundColor: '#10b981', boxShadow: '0 0 8px #10b981' }} />
+                  <span>{liveStats.activeRooms} Live {liveStats.activeRooms === 1 ? 'Party' : 'Parties'} • {liveStats.activeViewers} Watching</span>
+                </>
+              ) : (
+                <>
+                  <Clapperboard size={14} color="#ea383e" />
+                  <span>Watch Movies &amp; Series With Friends</span>
+                </>
+              )}
+            </div>
+
+            {liveStats.totalRoomsCreated > 0 && (
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.45rem',
+                  padding: '0.4rem 0.95rem',
+                  borderRadius: 'var(--radius-full)',
+                  background: 'rgba(139, 92, 246, 0.14)',
+                  border: '1px solid rgba(139, 92, 246, 0.35)',
+                  fontSize: '0.825rem',
+                  color: '#ddd6fe',
+                  fontWeight: 600,
+                  backdropFilter: 'blur(8px)',
+                }}
+              >
+                <Flame size={14} color="#a78bfa" />
+                <span>{liveStats.totalRoomsCreated.toLocaleString()} Rooms Created</span>
+              </div>
             )}
           </div>
 
@@ -1294,25 +1339,49 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             alignItems: 'center',
             justifyContent: 'center',
             flexWrap: 'wrap',
-            gap: '0.65rem',
+            gap: '0.6rem',
             marginTop: '2.5rem',
           }}
         >
           <span className="format-pill">
-            <Radio size={14} color="#ea383e" />
-            <span>Live IPTV & HLS</span>
+            <YouTubeLogo size={15} />
+            <span>YouTube &amp; Playlists</span>
           </span>
           <span className="format-pill">
-            <Play size={14} color="#ea383e" />
-            <span>YouTube Sync</span>
+            <VimeoLogo size={14} />
+            <span>Vimeo</span>
+          </span>
+          <span className="format-pill">
+            <TwitchLogo size={14} />
+            <span>Twitch</span>
+          </span>
+          <span className="format-pill">
+            <DailymotionLogo size={14} />
+            <span>Dailymotion</span>
+          </span>
+          <span className="format-pill">
+            <SoundCloudLogo size={16} />
+            <span>SoundCloud</span>
+          </span>
+          <span className="format-pill">
+            <GoogleDriveLogo size={14} />
+            <span>Google Drive</span>
+          </span>
+          <span className="format-pill">
+            <DropboxLogo size={14} />
+            <span>Dropbox</span>
+          </span>
+          <span className="format-pill">
+            <Radio size={14} color="#ea383e" />
+            <span>HLS &amp; DASH (.mpd)</span>
           </span>
           <span className="format-pill">
             <Film size={14} color="#a78bfa" />
-            <span>MP4 & WebM</span>
+            <span>MP4 &amp; WebM</span>
           </span>
           <span className="format-pill">
-            <span>🎙️</span>
-            <span>30s Voice Notes</span>
+            <MonitorUp size={14} color="#38bdf8" />
+            <span>Local File &amp; Tab Share</span>
           </span>
           <span className="format-pill">
             <Lock size={13} color="#fbbf24" />
