@@ -252,6 +252,22 @@ export function App() {
     initialRoute.type === 'landing' &&
     !isRoomExpired
 
+  // Keep page title and robots meta accurate between Landing Page (indexed) and Private Rooms (noindex)
+  useEffect(() => {
+    const robotsMeta = document.querySelector('meta[name="robots"]')
+    if (isLandingView) {
+      document.title = 'DekhoPrime Party — Watch Movies, YouTube & Live Streams Together in Sync'
+      robotsMeta?.setAttribute(
+        'content',
+        'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1'
+      )
+    } else {
+      const titlePrefix = roomMetadata.roomTitle?.trim() || 'Watch Room'
+      document.title = `${titlePrefix} — DekhoPrime Party`
+      robotsMeta?.setAttribute('content', 'noindex, nofollow')
+    }
+  }, [isLandingView, roomMetadata.roomTitle])
+
   if (isLandingView) {
     return (
       <>

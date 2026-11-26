@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /room/
+
+Sitemap: https://party.dekhoprime.live/sitemap.xml
+
