@@ -5,6 +5,7 @@ import { PartyHeader } from '@/components/header/PartyHeader'
 import { PartyPlayer } from '@/components/player/PartyPlayer'
 import { PartyChat } from '@/components/chat/PartyChat'
 import { FloatingReactions } from '@/components/reactions/FloatingReactions'
+import { TheaterChatToasts } from '@/components/player/TheaterChatToasts'
 import { InviteModal } from '@/components/modals/InviteModal'
 import { StreamSelectorModal } from '@/components/modals/StreamSelectorModal'
 import { EditNameModal } from '@/components/modals/EditNameModal'
@@ -83,6 +84,18 @@ export function App() {
   const [isStreamModalOpen, setIsStreamModalOpen] = useState<boolean>(false)
   const [isEditNameOpen, setIsEditNameOpen] = useState<boolean>(false)
   const [isConfirmExitOpen, setIsConfirmExitOpen] = useState<boolean>(false)
+  const [isLandscapeMobile, setIsLandscapeMobile] = useState<boolean>(() =>
+    typeof window !== 'undefined'
+      ? window.matchMedia('(max-height: 520px) and (orientation: landscape)').matches
+      : false
+  )
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-height: 520px) and (orientation: landscape)')
+    const onChange = (e: MediaQueryListEvent) => setIsLandscapeMobile(e.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
   // URL and Path Route parsing (/room/:id, /room/new, or landing)
   const [initialRoute] = useState(() => parseCurrentRoute())
   const [launchMeta, setLaunchMeta] = useState<{
@@ -114,6 +127,7 @@ export function App() {
     return true
   })
   const [isTheaterMode, setIsTheaterMode] = useState<boolean>(false)
+  const isEffectiveTheater = isTheaterMode || isLandscapeMobile
 
   // Auto-fill nickname from Google profile when signed in (if still default Viewer XXX)
   useEffect(() => {
@@ -284,7 +298,7 @@ export function App() {
         isPeerBuffering={isPeerBuffering}
         bufferingPeerName={bufferingPeerName}
         userName={userName}
-        isTheaterMode={isTheaterMode}
+        isTheaterMode={isEffectiveTheater}
         onToggleTheaterMode={() => setIsTheaterMode((prev) => !prev)}
         onOpenInvite={() => setIsInviteOpen(true)}
         onOpenStreamModal={() => setIsStreamModalOpen(true)}
@@ -293,7 +307,7 @@ export function App() {
       />
 
       {/* Main Split View */}
-      <main className={`party-main ${isTheaterMode ? 'theater-mode' : ''}`}>
+      <main className={`party-main ${isEffectiveTheater ? 'theater-mode' : ''}`}>
         {/* Left: Video Player */}
         <div className="player-wrapper">
           <PartyPlayer
@@ -329,7 +343,7 @@ export function App() {
               aria-hidden="true"
               style={{
                 position: 'absolute',
-                bottom: '3.25rem',
+                bottom: '4.25rem',
                 left: '0.85rem',
                 zIndex: 18,
                 pointerEvents: 'none',
@@ -348,6 +362,9 @@ export function App() {
 
           {/* Floating Emoji Reactions Layer */}
           <FloatingReactions reactions={reactions} />
+
+          {/* Cinema / Theater Mode Auto-Fading Chat Toasts */}
+          {isEffectiveTheater && <TheaterChatToasts messages={messages} />}
 
           {/* Host Reconnecting Grace Period Banner */}
           {isHostReconnecting && (
@@ -408,6 +425,14 @@ export function App() {
           onSendMessage={sendChatMessage}
           onSendTypingStatus={sendTypingStatus}
           onTriggerReaction={triggerReaction}
+          onSeekToTimestamp={(sec) => {
+            if (playerControllerRef.current) {
+              playerControllerRef.current.seekTo(sec)
+            } else if (videoRef.current) {
+              videoRef.current.currentTime = sec
+            }
+            handlePlayerSeek(sec)
+          }}
         />
       </main>
 

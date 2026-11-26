@@ -49,6 +49,7 @@ export interface ChatMessage {
   imageUrl?: string
   audioUrl?: string
   audioDuration?: number
+  mediaTimestamp?: number
   timestamp: number
   isSystem?: boolean
   isHost?: boolean

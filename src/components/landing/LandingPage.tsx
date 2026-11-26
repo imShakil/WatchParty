@@ -4,21 +4,18 @@ import {
   LogIn,
   Tv,
   Film,
-  Clapperboard,
-  Smile,
-  ShieldCheck,
   ExternalLink,
   ChevronRight,
   Hash,
   User,
   Flame,
-  Users,
   Lock,
   Radio,
   LogOut,
   Pin,
   Trash2,
   MonitorUp,
+  Heart,
 } from 'lucide-react'
 import {
   YouTubeLogo,
@@ -139,6 +136,81 @@ const FEATURED_TITLES: FeaturedTitle[] = [
   },
 ]
 
+const PREVIEW_SCENES = [
+  {
+    id: 'date-night',
+    roomLabel: 'Date Night Room • #movie-for-two',
+    badgeText: 'Locked',
+    badgeColor: '#fbbf24',
+    badgeBg: 'rgba(251, 191, 36, 0.12)',
+    badgeBorder: 'rgba(251, 191, 36, 0.25)',
+    isLocked: true,
+    timeText: '01:14:22 / 02:08:00',
+    progress: '58%',
+    gradient: 'radial-gradient(circle at 30% 30%, rgba(244, 63, 94, 0.3), rgba(15, 17, 25, 0.96) 72%)',
+    cardBg: 'linear-gradient(155deg, rgba(244, 63, 94, 0.14) 0%, rgba(21, 24, 34, 0.92) 48%, rgba(15, 17, 25, 0.98) 100%)',
+    progressGradient: 'linear-gradient(90deg, #ea383e, #ec4899)',
+    avatars: [
+      { label: 'A', bg: '#f43f5e' },
+      { label: 'M', bg: '#8b5cf6' },
+    ],
+    chatAuthor: 'Maya',
+    chatColor: '#f472b6',
+    chatText: 'Wait for this scene ❤️',
+    replyText: 'Right here with you 🍿',
+    reactions: '🍿❤️',
+  },
+  {
+    id: 'comedy-friends',
+    roomLabel: 'Friday Comedy • #squad-night',
+    badgeText: '6 Watching',
+    badgeColor: '#34d399',
+    badgeBg: 'rgba(16, 185, 129, 0.14)',
+    badgeBorder: 'rgba(16, 185, 129, 0.3)',
+    isLocked: false,
+    timeText: '00:42:10 / 01:36:00',
+    progress: '44%',
+    gradient: 'radial-gradient(circle at 70% 25%, rgba(245, 158, 11, 0.26), rgba(15, 17, 25, 0.96) 72%)',
+    cardBg: 'linear-gradient(155deg, rgba(245, 158, 11, 0.12) 0%, rgba(21, 24, 34, 0.92) 48%, rgba(15, 17, 25, 0.98) 100%)',
+    progressGradient: 'linear-gradient(90deg, #f59e0b, #ec4899)',
+    avatars: [
+      { label: 'S', bg: '#f59e0b' },
+      { label: 'R', bg: '#10b981' },
+      { label: 'K', bg: '#3b82f6' },
+      { label: '+3', bg: '#334155' },
+    ],
+    chatAuthor: 'Rafi',
+    chatColor: '#fbbf24',
+    chatText: '😂😂 bro rewind that part!',
+    replyText: 'Hold on rewinding 10s 💀',
+    reactions: '😂🔥💀',
+  },
+  {
+    id: 'music-chill',
+    roomLabel: 'Late-Night Playlist • #lofi-vibes',
+    badgeText: 'Track 3/12',
+    badgeColor: '#38bdf8',
+    badgeBg: 'rgba(56, 189, 248, 0.14)',
+    badgeBorder: 'rgba(56, 189, 248, 0.3)',
+    isLocked: false,
+    timeText: '02:18 / 03:45',
+    progress: '62%',
+    gradient: 'radial-gradient(circle at 35% 70%, rgba(56, 189, 248, 0.24), rgba(15, 17, 25, 0.96) 72%)',
+    cardBg: 'linear-gradient(155deg, rgba(56, 189, 248, 0.12) 0%, rgba(21, 24, 34, 0.92) 48%, rgba(15, 17, 25, 0.98) 100%)',
+    progressGradient: 'linear-gradient(90deg, #06b6d4, #8b5cf6)',
+    avatars: [
+      { label: 'N', bg: '#06b6d4' },
+      { label: 'T', bg: '#a855f7' },
+      { label: 'Z', bg: '#ec4899' },
+    ],
+    chatAuthor: 'Nadia',
+    chatColor: '#38bdf8',
+    chatText: 'This song hits different at 2am 🎧',
+    replyText: 'Adding track 4 to queue ✨',
+    reactions: '🎵✨',
+  },
+]
+
 export const LandingPage: React.FC<LandingPageProps> = ({
   userName,
   user,
@@ -160,6 +232,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     totalRoomsCreated: 0,
   })
   const [myPermanentRooms, setMyPermanentRooms] = useState<PermanentRoomSummary[]>([])
+  const [activeSceneIdx, setActiveSceneIdx] = useState<number>(0)
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setActiveSceneIdx((prev) => (prev + 1) % PREVIEW_SCENES.length)
+    }, 4500)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  const activeScene = PREVIEW_SCENES[activeSceneIdx] || PREVIEW_SCENES[0]
   const slugEligibility = useRoomIdEligibility(customSlug)
 
   useEffect(() => {
@@ -455,8 +537,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </>
               ) : (
                 <>
-                  <Clapperboard size={14} color="#ea383e" />
-                  <span>Watch Movies &amp; Series With Friends</span>
+                  <Heart size={14} color="#f43f5e" fill="#f43f5e" />
+                  <span>Cozy Movie Dates &amp; Watch Parties</span>
                 </>
               )}
             </div>
@@ -496,15 +578,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               textShadow: '0 4px 20px rgba(0, 0, 0, 0.8)',
             }}
           >
-            Watch Movies Together.{' '}
+            Watch Together.{' '}
             <span
               style={{
-                background: 'linear-gradient(135deg, #ea383e 0%, #f43f5e 60%, #ec4899 100%)',
+                background: 'linear-gradient(135deg, #f43f5e 0%, #ec4899 55%, #a855f7 100%)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
               }}
             >
-              Synced to the Second.
+              Even Miles Apart.
             </span>
           </h1>
 
@@ -519,7 +601,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               textShadow: '0 2px 10px rgba(0, 0, 0, 0.6)',
             }}
           >
-            Stream movies, series, YouTube videos, and local files with friends. When you play, pause, or rewind, everyone stays in lockstep. Zero lag, no accounts needed.
+            Turn any screen into a private date night or hangout. Stream movies, YouTube playlists, and music in lockstep—send voice notes, drop live hearts, and feel right next to each other.
           </p>
 
           {/* Quick Nickname Pill (or Signed-in Profile Badge) */}
@@ -1182,219 +1264,460 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </div>
       </section>
 
-      {/* How It Works & Formats Section */}
+      {/* Modern Split Showcase & Supported Platforms Dock */}
       <section
         style={{
-          padding: '3.5rem 1.5rem',
-          maxWidth: '1240px',
+          padding: '3.25rem 1.5rem 2.5rem',
+          maxWidth: '1180px',
           margin: '0 auto',
           width: '100%',
           position: 'relative',
           zIndex: 1,
         }}
       >
-        <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
-          <h2
-            style={{
-              fontSize: '1.75rem',
-              fontWeight: 800,
-              fontFamily: 'var(--font-display)',
-              marginBottom: '0.45rem',
-            }}
-          >
-            How Watch Party Works
-          </h2>
-          <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-            No accounts or downloads required. Start a room and watch together in seconds.
-          </p>
-        </div>
-
-        {/* 3 Practical Steps */}
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-            gap: '1.5rem',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
+            gap: '2.25rem',
+            alignItems: 'center',
           }}
         >
-          {/* Step 1 */}
+          {/* Left: Tactile Auto-Sliding Watch Party Preview */}
           <div
             style={{
-              background: 'rgba(21, 24, 34, 0.65)',
-              backdropFilter: 'blur(12px)',
-              borderRadius: 'var(--radius-lg)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              padding: '1.75rem',
+              borderRadius: '20px',
+              background: activeScene.cardBg,
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              padding: '1.25rem',
+              boxShadow: '0 24px 54px rgba(0, 0, 0, 0.55)',
               display: 'flex',
               flexDirection: 'column',
-              gap: '0.85rem',
-              position: 'relative',
+              gap: '0.9rem',
+              transition: 'background 0.45s ease',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div
+            {/* Top bar of preview */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
+                <span className="status-dot" style={{ backgroundColor: '#10b981', boxShadow: '0 0 8px #10b981', flexShrink: 0 }} />
+                <span
+                  style={{
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    color: '#e2e8f0',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {activeScene.roomLabel}
+                </span>
+              </div>
+              <span
                 style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: 'var(--radius-md)',
-                  background: 'rgba(234, 56, 62, 0.15)',
-                  display: 'flex',
+                  fontSize: '0.68rem',
+                  fontWeight: 700,
+                  color: activeScene.badgeColor,
+                  background: activeScene.badgeBg,
+                  border: `1px solid ${activeScene.badgeBorder}`,
+                  padding: '0.18rem 0.55rem',
+                  borderRadius: '999px',
+                  display: 'inline-flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
+                  gap: '0.3rem',
+                  flexShrink: 0,
                 }}
               >
-                <Play size={18} color="#ea383e" fill="#ea383e" />
-              </div>
-              <span style={{ fontSize: '1.5rem', fontWeight: 900, color: 'rgba(255, 255, 255, 0.12)', fontFamily: 'var(--font-display)' }}>
-                01
+                {activeScene.isLocked && <Lock size={10} />}
+                {activeScene.badgeText}
               </span>
             </div>
-            <h4 style={{ fontSize: '1.05rem', fontWeight: 700 }}>Choose or paste any video</h4>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.55 }}>
-              Pick from featured titles above, paste a YouTube link or live IPTV feed, or load a local video file from your device.
-            </p>
+
+            {/* Real Room Layout Preview: Player + Chat Sidebar (stacks on mobile) */}
+            <div className="preview-room-grid">
+              {/* Left: Video Player Frame (Reactions only, no chat overlay) */}
+              <div
+                style={{
+                  width: '100%',
+                  minWidth: 0,
+                  borderRadius: '12px',
+                  aspectRatio: '16 / 10',
+                  background: activeScene.gradient,
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  padding: '0.75rem',
+                  transition: 'background 0.45s ease',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.4rem' }}>
+                  <span style={{ fontSize: '0.68rem', fontFamily: 'monospace', color: 'rgba(255,255,255,0.5)', whiteSpace: 'nowrap' }}>
+                    {activeScene.timeText}
+                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    {activeScene.avatars.map((av, idx) => (
+                      <span
+                        key={av.label}
+                        style={{
+                          width: '20px',
+                          height: '20px',
+                          borderRadius: '50%',
+                          background: av.bg,
+                          border: '2px solid #0f1117',
+                          marginLeft: idx === 0 ? 0 : '-6px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '0.56rem',
+                          fontWeight: 800,
+                          color: '#fff',
+                        }}
+                      >
+                        {av.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Center Play Indicator */}
+                <div style={{ alignSelf: 'center' }}>
+                  <div
+                    style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '50%',
+                      background: 'rgba(255, 255, 255, 0.14)',
+                      backdropFilter: 'blur(8px)',
+                      border: '1px solid rgba(255, 255, 255, 0.22)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Play size={16} color="#fff" fill="#fff" style={{ marginLeft: '2px' }} />
+                  </div>
+                </div>
+
+                {/* Bottom Floating Reactions & Progress */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <span style={{ fontSize: '1rem', lineHeight: 1 }}>{activeScene.reactions}</span>
+                  </div>
+                  <div style={{ height: '3px', borderRadius: '999px', background: 'rgba(255,255,255,0.16)', overflow: 'hidden' }}>
+                    <div style={{ width: activeScene.progress, height: '100%', background: activeScene.progressGradient, transition: 'width 0.4s ease' }} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Right (Desktop) / Bottom (Mobile): Mini Chat Sidebar */}
+              <div
+                style={{
+                  width: '100%',
+                  minWidth: 0,
+                  borderRadius: '12px',
+                  background: 'rgba(11, 13, 20, 0.88)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  overflow: 'hidden',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.07)',
+                    fontSize: '0.66rem',
+                    fontWeight: 700,
+                  }}
+                >
+                  <div
+                    style={{
+                      flex: 1,
+                      textAlign: 'center',
+                      padding: '0.4rem',
+                      color: '#fff',
+                      borderBottom: '2px solid #8b5cf6',
+                    }}
+                  >
+                    Chat
+                  </div>
+                  <div
+                    style={{
+                      flex: 1,
+                      textAlign: 'center',
+                      padding: '0.4rem',
+                      color: 'var(--text-dim)',
+                    }}
+                  >
+                    People
+                  </div>
+                </div>
+
+                <div style={{ padding: '0.55rem', display: 'flex', flexDirection: 'column', gap: '0.45rem', flex: 1, justifyContent: 'center' }}>
+                  <div
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid rgba(255, 255, 255, 0.07)',
+                      borderRadius: '8px 8px 8px 2px',
+                      padding: '0.4rem 0.55rem',
+                      fontSize: '0.68rem',
+                      color: '#e2e8f0',
+                      lineHeight: 1.35,
+                      alignSelf: 'flex-start',
+                      maxWidth: '92%',
+                    }}
+                  >
+                    <div style={{ color: activeScene.chatColor, fontWeight: 700, fontSize: '0.62rem', marginBottom: '2px' }}>
+                      {activeScene.chatAuthor}
+                    </div>
+                    {activeScene.chatText}
+                  </div>
+                  <div
+                    style={{
+                      background: '#7c3aed',
+                      borderRadius: '8px 8px 2px 8px',
+                      padding: '0.4rem 0.55rem',
+                      fontSize: '0.68rem',
+                      color: '#fff',
+                      lineHeight: 1.35,
+                      alignSelf: 'flex-end',
+                      maxWidth: '88%',
+                    }}
+                  >
+                    {activeScene.replyText}
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    padding: '0.4rem 0.55rem',
+                    borderTop: '1px solid rgba(255, 255, 255, 0.07)',
+                    fontSize: '0.64rem',
+                    color: 'var(--text-dim)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <span>Say something...</span>
+                  <span>❤️ 😂 🍿</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Slide Indicators */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
+              {PREVIEW_SCENES.map((scene, idx) => (
+                <button
+                  key={scene.id}
+                  type="button"
+                  onClick={() => setActiveSceneIdx(idx)}
+                  aria-label={`Show ${scene.id} preview`}
+                  style={{
+                    width: idx === activeSceneIdx ? '20px' : '6px',
+                    height: '6px',
+                    borderRadius: '999px',
+                    border: 'none',
+                    padding: 0,
+                    cursor: 'pointer',
+                    background: idx === activeSceneIdx ? '#f43f5e' : 'rgba(255, 255, 255, 0.2)',
+                    transition: 'all 0.25s ease',
+                  }}
+                />
+              ))}
+            </div>
           </div>
 
-          {/* Step 2 */}
-          <div
-            style={{
-              background: 'rgba(21, 24, 34, 0.65)',
-              backdropFilter: 'blur(12px)',
-              borderRadius: 'var(--radius-lg)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              padding: '1.75rem',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.85rem',
-              position: 'relative',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div
+          {/* Right: Editorial 3-Step Flow */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.35rem', textAlign: 'left' }}>
+            <div>
+              <h2
                 style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: 'var(--radius-md)',
-                  background: 'rgba(139, 92, 246, 0.15)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  fontSize: 'clamp(1.5rem, 3.5vw, 2.05rem)',
+                  fontWeight: 800,
+                  fontFamily: 'var(--font-display)',
+                  lineHeight: 1.2,
+                  marginBottom: '0.5rem',
                 }}
               >
-                <Users size={18} color="var(--accent-purple)" />
-              </div>
-              <span style={{ fontSize: '1.5rem', fontWeight: 900, color: 'rgba(255, 255, 255, 0.12)', fontFamily: 'var(--font-display)' }}>
-                02
-              </span>
+                Made for Movie Nights &amp; Hangouts
+              </h2>
+              <p style={{ fontSize: '0.92rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                No downloads, no sign-ups, no &ldquo;3, 2, 1, press play&rdquo;. Just open a room and stay in lockstep.
+              </p>
             </div>
-            <h4 style={{ fontSize: '1.05rem', fontWeight: 700 }}>Send your invite link</h4>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.55 }}>
-              Share your room URL with friends. Lock the room anytime with one click once everyone joins (supports up to 15 viewers).
-            </p>
-          </div>
 
-          {/* Step 3 */}
-          <div
-            style={{
-              background: 'rgba(21, 24, 34, 0.65)',
-              backdropFilter: 'blur(12px)',
-              borderRadius: 'var(--radius-lg)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              padding: '1.75rem',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.85rem',
-              position: 'relative',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div
-                style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: 'var(--radius-md)',
-                  background: 'rgba(251, 191, 36, 0.15)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Smile size={18} color="#fbbf24" />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.85rem' }}>
+                <span
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '8px',
+                    background: 'rgba(234, 56, 62, 0.16)',
+                    color: '#f87171',
+                    fontSize: '0.8rem',
+                    fontWeight: 800,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    marginTop: '2px',
+                  }}
+                >
+                  1
+                </span>
+                <div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#fff' }}>
+                    Drop any link, playlist, or local file
+                  </div>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                    YouTube playlists, Vimeo, Twitch, Drive, IPTV streams, or even a browser tab.
+                  </div>
+                </div>
               </div>
-              <span style={{ fontSize: '1.5rem', fontWeight: 900, color: 'rgba(255, 255, 255, 0.12)', fontFamily: 'var(--font-display)' }}>
-                03
-              </span>
+
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.85rem' }}>
+                <span
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '8px',
+                    background: 'rgba(236, 72, 153, 0.16)',
+                    color: '#f472b6',
+                    fontSize: '0.8rem',
+                    fontWeight: 800,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    marginTop: '2px',
+                  }}
+                >
+                  2
+                </span>
+                <div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#fff' }}>
+                    Invite your person or close circle
+                  </div>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                    Share one link. Lock the room with 1 tap or protect it with a PIN (up to 15 viewers).
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.85rem' }}>
+                <span
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '8px',
+                    background: 'rgba(139, 92, 246, 0.16)',
+                    color: '#a78bfa',
+                    fontSize: '0.8rem',
+                    fontWeight: 800,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    marginTop: '2px',
+                  }}
+                >
+                  3
+                </span>
+                <div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#fff' }}>
+                    Watch, whisper voice notes &amp; react
+                  </div>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                    Every play, pause, and seek syncs automatically while you chat and send 30s voice notes.
+                  </div>
+                </div>
+              </div>
             </div>
-            <h4 style={{ fontSize: '1.05rem', fontWeight: 700 }}>Watch and react together</h4>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.55 }}>
-              Playback stays in sync automatically. Send 30s voice notes, share images, and drop live reactions without buffering drift.
-            </p>
           </div>
         </div>
 
-        {/* Supported Media & Privacy Pills Bar */}
+        {/* Unified Supported Platforms Dock */}
         <div
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexWrap: 'wrap',
-            gap: '0.6rem',
             marginTop: '2.5rem',
+            padding: '1.1rem 1.25rem',
+            borderRadius: '16px',
+            background: 'rgba(21, 24, 34, 0.6)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '0.85rem',
           }}
         >
-          <span className="format-pill">
-            <YouTubeLogo size={15} />
-            <span>YouTube &amp; Playlists</span>
+          <span
+            style={{
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+              color: 'var(--text-dim)',
+            }}
+          >
+            Works Seamlessly With
           </span>
-          <span className="format-pill">
-            <VimeoLogo size={14} />
-            <span>Vimeo</span>
-          </span>
-          <span className="format-pill">
-            <TwitchLogo size={14} />
-            <span>Twitch</span>
-          </span>
-          <span className="format-pill">
-            <DailymotionLogo size={14} />
-            <span>Dailymotion</span>
-          </span>
-          <span className="format-pill">
-            <SoundCloudLogo size={16} />
-            <span>SoundCloud</span>
-          </span>
-          <span className="format-pill">
-            <GoogleDriveLogo size={14} />
-            <span>Google Drive</span>
-          </span>
-          <span className="format-pill">
-            <DropboxLogo size={14} />
-            <span>Dropbox</span>
-          </span>
-          <span className="format-pill">
-            <Radio size={14} color="#ea383e" />
-            <span>HLS &amp; DASH (.mpd)</span>
-          </span>
-          <span className="format-pill">
-            <Film size={14} color="#a78bfa" />
-            <span>MP4 &amp; WebM</span>
-          </span>
-          <span className="format-pill">
-            <MonitorUp size={14} color="#38bdf8" />
-            <span>Local File &amp; Tab Share</span>
-          </span>
-          <span className="format-pill">
-            <Lock size={13} color="#fbbf24" />
-            <span>1-Tap Room Lock</span>
-          </span>
-          <span className="format-pill">
-            <Users size={14} color="#34d399" />
-            <span>Up to 15 Viewers</span>
-          </span>
-          <span className="format-pill">
-            <ShieldCheck size={14} color="#60a5fa" />
-            <span>No Accounts Needed</span>
-          </span>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexWrap: 'wrap',
+              gap: '0.55rem',
+            }}
+          >
+            <span className="format-pill">
+              <YouTubeLogo size={15} />
+              <span>YouTube &amp; Playlists</span>
+            </span>
+            <span className="format-pill">
+              <VimeoLogo size={14} />
+              <span>Vimeo</span>
+            </span>
+            <span className="format-pill">
+              <TwitchLogo size={14} />
+              <span>Twitch</span>
+            </span>
+            <span className="format-pill">
+              <DailymotionLogo size={14} />
+              <span>Dailymotion</span>
+            </span>
+            <span className="format-pill">
+              <SoundCloudLogo size={16} />
+              <span>SoundCloud</span>
+            </span>
+            <span className="format-pill">
+              <GoogleDriveLogo size={14} />
+              <span>Google Drive</span>
+            </span>
+            <span className="format-pill">
+              <DropboxLogo size={14} />
+              <span>Dropbox</span>
+            </span>
+            <span className="format-pill">
+              <Radio size={14} color="#ea383e" />
+              <span>HLS &amp; DASH (.mpd)</span>
+            </span>
+            <span className="format-pill">
+              <Film size={14} color="#a78bfa" />
+              <span>MP4 &amp; WebM</span>
+            </span>
+            <span className="format-pill">
+              <MonitorUp size={14} color="#38bdf8" />
+              <span>Local File &amp; Tab Share</span>
+            </span>
+          </div>
         </div>
       </section>
 
@@ -1493,9 +1816,48 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               © {new Date().getFullYear()}
             </span>
           </div>
-          <span style={{ fontSize: '0.74rem', color: 'var(--text-dim)' }}>
-            Real-time synchronized watch party
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+            <a
+              href="https://directyp.org/4/aeb051115f4be77122a44707db1760a1"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                padding: '0.3rem 0.65rem',
+                borderRadius: '999px',
+                background: 'rgba(236, 72, 153, 0.12)',
+                border: '1px solid rgba(236, 72, 153, 0.3)',
+                color: '#f472b6',
+                fontSize: '0.72rem',
+                fontWeight: 600,
+                textDecoration: 'none',
+              }}
+              title="Support DekhoPrime Watch Party"
+            >
+              <Heart size={12} fill="currentColor" />
+              <span>Support Us</span>
+            </a>
+            <a
+              href="https://beta.publishers.adsterra.com/referral/1XU1UuDLQw"
+              target="_blank"
+              rel="nofollow noopener noreferrer"
+              style={{
+                display: 'inline-block',
+                borderRadius: '4px',
+                overflow: 'hidden',
+                lineHeight: 0,
+              }}
+              title="Powered by Adsterra"
+            >
+              <img
+                alt="Adsterra"
+                src="https://landings-cdn.adsterratech.com/referralBanners/gif/120x60_adsterra_reff.gif"
+                style={{ height: '28px', width: 'auto', display: 'block' }}
+              />
+            </a>
+          </div>
         </div>
       </footer>
     </div>

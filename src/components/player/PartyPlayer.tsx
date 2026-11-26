@@ -109,7 +109,9 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false)
   const [isBuffering, setIsBuffering] = useState<boolean>(false)
   const [showControls, setShowControls] = useState<boolean>(true)
+  const [showHostOnlyNotice, setShowHostOnlyNotice] = useState<boolean>(false)
   const hideControlsTimer = useRef<number | null>(null)
+  const hostOnlyNoticeTimer = useRef<number | null>(null)
   const guestVideoRef = useRef<HTMLVideoElement | null>(null)
   const hostTabVideoRef = useRef<HTMLVideoElement | null>(null)
   const embedIframeRef = useRef<HTMLIFrameElement | null>(null)
@@ -447,8 +449,21 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
     }, 3200)
   }, [isPlaying])
 
+  const triggerHostOnlyNotice = useCallback(() => {
+    setShowHostOnlyNotice(true)
+    if (hostOnlyNoticeTimer.current) {
+      window.clearTimeout(hostOnlyNoticeTimer.current)
+    }
+    hostOnlyNoticeTimer.current = window.setTimeout(() => {
+      setShowHostOnlyNotice(false)
+    }, 2400)
+  }, [])
+
   const togglePlay = () => {
-    if (!canControl) return
+    if (!canControl) {
+      triggerHostOnlyNotice()
+      return
+    }
     if (controllerRef?.current) {
       if (isPlaying) {
         controllerRef.current.pause()
@@ -480,7 +495,10 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
   }
 
   const handleSeekChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!canControl) return
+    if (!canControl) {
+      triggerHostOnlyNotice()
+      return
+    }
     const newTime = parseFloat(e.target.value)
     if (controllerRef?.current) {
       controllerRef.current.seekTo(newTime)
@@ -497,7 +515,10 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
   }
 
   const skipTime = (seconds: number) => {
-    if (!canControl) return
+    if (!canControl) {
+      triggerHostOnlyNotice()
+      return
+    }
     if (controllerRef?.current) {
       const target = Math.max(0, Math.min(duration || 0, currentTime + seconds))
       controllerRef.current.seekTo(target)
@@ -571,6 +592,32 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
   }, [])
 
   const progressPercent = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0
+
+  const hostControlsOnlyBadge = !canControl && showHostOnlyNotice ? (
+    <div
+      style={{
+        position: 'absolute',
+        top: '0.85rem',
+        left: '0.85rem',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.45rem',
+        padding: '0.35rem 0.75rem',
+        borderRadius: 'var(--radius-full)',
+        background: 'rgba(0, 0, 0, 0.75)',
+        backdropFilter: 'blur(8px)',
+        border: '1px solid rgba(245, 158, 11, 0.35)',
+        fontSize: '0.74rem',
+        fontWeight: 600,
+        color: '#fde68a',
+        zIndex: 25,
+        pointerEvents: 'none',
+      }}
+    >
+      <Lock size={12} color="#f59e0b" />
+      <span>Host Controls Only</span>
+    </div>
+  ) : null
 
   const centerControlsOverlay = canControl ? (
     <div
@@ -748,7 +795,11 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
           <div
             onClick={() => {
               triggerUserActivity()
-              if (canControl) togglePlay()
+              if (canControl) {
+                togglePlay()
+              } else {
+                triggerHostOnlyNotice()
+              }
             }}
             style={{
               position: 'absolute',
@@ -758,29 +809,8 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
             }}
           />
 
-          {/* Locked controls notice for guests if host only */}
-          {!canControl && (
-            <div
-              style={{
-                position: 'absolute',
-                top: '0.75rem',
-                left: '0.75rem',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.45rem',
-                padding: '0.35rem 0.7rem',
-                borderRadius: 'var(--radius-full)',
-                background: 'rgba(0, 0, 0, 0.7)',
-                border: '1px solid var(--border-subtle)',
-                fontSize: '0.72rem',
-                color: 'var(--text-muted)',
-                zIndex: 20,
-              }}
-            >
-              <Lock size={12} color="#f59e0b" />
-              <span>Host Controls Only</span>
-            </div>
-          )}
+          {/* Locked controls notice (shown briefly only when guest tries to control) */}
+          {hostControlsOnlyBadge}
 
           {/* YouTube Playlist Controls & Queue Drawer */}
           {youtubePlaylistId && (
@@ -1459,29 +1489,8 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
             </div>
           )}
 
-          {/* Locked controls notice for guests if host only */}
-          {!canControl && (
-            <div
-              style={{
-                position: 'absolute',
-                top: '1rem',
-                left: '1rem',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                padding: '0.4rem 0.8rem',
-                borderRadius: 'var(--radius-full)',
-                background: 'rgba(0, 0, 0, 0.65)',
-                border: '1px solid var(--border-subtle)',
-                fontSize: '0.75rem',
-                color: 'var(--text-muted)',
-                zIndex: 20,
-              }}
-            >
-              <Lock size={12} color="#f59e0b" />
-              <span>Host Controls Only</span>
-            </div>
-          )}
+          {/* Locked controls notice (shown briefly only when guest tries to control) */}
+          {hostControlsOnlyBadge}
 
           {/* P2P Live Broadcast Badge */}
           {isP2PStream && (

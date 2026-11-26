@@ -42,6 +42,18 @@ interface PartyChatProps {
   onSendMessage: (text: string, imageUrl?: string, audioUrl?: string, audioDuration?: number) => void
   onSendTypingStatus?: (isTyping: boolean) => void
   onTriggerReaction: (emoji: string) => void
+  onSeekToTimestamp?: (seconds: number) => void
+}
+
+function formatMediaTimestamp(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds))
+  const h = Math.floor(total / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  const s = total % 60
+  if (h > 0) {
+    return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+  }
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
 }
 
 const REACTION_EMOJIS = ['❤️', '😂', '😭', '😱', '🍿', '🔥', '😮', '👏', '🎉', '👻']
@@ -72,6 +84,7 @@ export const PartyChat: React.FC<PartyChatProps> = ({
   onSendMessage,
   onSendTypingStatus,
   onTriggerReaction,
+  onSeekToTimestamp,
 }) => {
   const [activeTab, setActiveTab] = useState<'chat' | 'people'>('chat')
   const [inputText, setInputText] = useState<string>('')
@@ -816,6 +829,40 @@ export const PartyChat: React.FC<PartyChatProps> = ({
                     <span style={{ fontSize: '0.65rem', color: 'var(--text-dim)' }}>
                       {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
+                    {typeof m.mediaTimestamp === 'number' && m.mediaTimestamp > 0 && (() => {
+                      const canSeek = Boolean(onSeekToTimestamp && (isHost || !isHostOnlyControl))
+                      const label = `@ ${formatMediaTimestamp(m.mediaTimestamp)}`
+                      return canSeek ? (
+                        <button
+                          type="button"
+                          onClick={() => onSeekToTimestamp?.(m.mediaTimestamp!)}
+                          title={`Jump to ${formatMediaTimestamp(m.mediaTimestamp)}`}
+                          style={{
+                            fontSize: '0.64rem',
+                            fontFamily: 'monospace',
+                            fontWeight: 700,
+                            padding: '0.05rem 0.35rem',
+                            borderRadius: '4px',
+                            border: '1px solid rgba(167, 139, 250, 0.3)',
+                            background: 'rgba(139, 92, 246, 0.14)',
+                            color: '#c4b5fd',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {label}
+                        </button>
+                      ) : (
+                        <span
+                          style={{
+                            fontSize: '0.64rem',
+                            fontFamily: 'monospace',
+                            color: 'var(--text-dim)',
+                          }}
+                        >
+                          {label}
+                        </span>
+                      )
+                    })()}
                   </div>
 
                   <div

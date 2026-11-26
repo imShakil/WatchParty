@@ -146,6 +146,11 @@ export function useWatchParty() {
   const isLocalAction = useRef<boolean>(false)
   const lastSyncTime = useRef<number>(0)
   const participantNamesRef = useRef<Record<string, string>>({})
+  const recentlyLeftPeersRef = useRef<Set<string>>(new Set())
+  const userNameRef = useRef<string>(userName)
+  useEffect(() => {
+    userNameRef.current = userName
+  }, [userName])
 
   // Embed Watch-Clock & ?startAt= Sync State
   const [embedClockTime, setEmbedClockTime] = useState<number>(0)
@@ -190,6 +195,7 @@ export function useWatchParty() {
   // Save username to storage
   const updateUserName = useCallback((name: string) => {
     const trimmed = name.trim() || `Viewer ${Math.floor(100 + Math.random() * 900)}`
+    userNameRef.current = trimmed
     setUserName(trimmed)
     localStorage.setItem('dekho_party_name', trimmed)
     if (peerService.myPeerId) {
@@ -250,6 +256,14 @@ export function useWatchParty() {
       const trimmed = text.trim()
       if (!trimmed && !imageUrl && !audioUrl) return
 
+      const rawPlaybackTime = isEmbedRoomRef.current
+        ? embedClockTimeRef.current
+        : getCurrentPlaybackTime()
+      const mediaTimestamp =
+        Number.isFinite(rawPlaybackTime) && rawPlaybackTime >= 1
+          ? Math.floor(rawPlaybackTime)
+          : undefined
+
       const msg: ChatMessage = {
         id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         senderId: peerService.myPeerId,
@@ -258,6 +272,7 @@ export function useWatchParty() {
         imageUrl,
         audioUrl,
         audioDuration,
+        mediaTimestamp,
         timestamp: Date.now(),
         isHost,
       }
@@ -285,7 +300,7 @@ export function useWatchParty() {
         payload: { isTyping: false, senderName: userName },
       })
     },
-    [userName, isHost, appendMessage]
+    [userName, isHost, appendMessage, getCurrentPlaybackTime]
   )
 
   // Send Typing Status
@@ -619,9 +634,24 @@ export function useWatchParty() {
           const info = packet.payload as { id: string; name: string }
           if (info && info.id && info.name) {
             participantNamesRef.current[info.id] = info.name
-            setParticipants((prev) =>
-              prev.map((p) => (p.id === info.id ? { ...p, name: info.name } : p))
-            )
+            setParticipants((prev) => {
+              const updated = prev.map((p) => (p.id === info.id ? { ...p, name: info.name } : p))
+              if (isHost) {
+                peerService.send({
+                  type: 'PARTICIPANT_ROSTER',
+                  senderId: peerService.myPeerId,
+                  senderName: userNameRef.current,
+                  payload: {
+                    participants: updated.map((p) => ({
+                      id: p.id,
+                      name: p.name,
+                      isHost: p.isHost,
+                    })),
+                  },
+                })
+              }
+              return updated
+            })
           }
           break
         }
@@ -824,7 +854,14 @@ export function useWatchParty() {
           if (peerId === peerService.myPeerId) break
 
           const displayName = leftUser || participantNamesRef.current[peerId] || 'A friend'
-          addSystemNotice(`${displayName} left the party.`)
+          delete participantNamesRef.current[peerId]
+
+          if (!recentlyLeftPeersRef.current.has(peerId)) {
+            recentlyLeftPeersRef.current.add(peerId)
+            setTimeout(() => recentlyLeftPeersRef.current.delete(peerId), 5000)
+            addSystemNotice(`${displayName} left the party.`)
+          }
+
           setParticipants((prev) => prev.filter((p) => p.id !== peerId))
           setTypingUsers((prev) => prev.filter((n) => n !== displayName))
 
@@ -1035,7 +1072,7 @@ export function useWatchParty() {
         })
         void registerPartyRoom(id, {
           title: meta.roomTitle,
-          hostName: userName,
+          hostName: userNameRef.current,
           isP2P: meta.isP2PStream,
           streamUrl: meta.streamUrl,
           posterUrl: meta.posterUrl,
@@ -1048,7 +1085,7 @@ export function useWatchParty() {
         setParticipants([
           {
             id,
-            name: `${userName} (Host)`,
+            name: `${userNameRef.current} (Host)`,
             isHost: true,
             isSelf: true,
             isBuffering: false,
@@ -1063,7 +1100,7 @@ export function useWatchParty() {
         setErrorMessage(msg)
       }
     },
-    [userName, addSystemNotice]
+    [addSystemNotice]
   )
 
   // Join existing Room as Guest
@@ -1128,17 +1165,22 @@ export function useWatchParty() {
         })
 
         // Send join request to host with optional passcode
+        const activeName = userNameRef.current
         peerService.send({
           type: 'JOIN_REQUEST',
           senderId: peerService.myPeerId,
-          senderName: userName,
-          payload: { peerId: peerService.myPeerId, userName, passcode: joinPasscodeRef.current || undefined },
+          senderName: activeName,
+          payload: {
+            peerId: peerService.myPeerId,
+            userName: activeName,
+            passcode: joinPasscodeRef.current || undefined,
+          },
         })
 
         setParticipants([
           {
             id: peerService.myPeerId,
-            name: userName,
+            name: activeName,
             isHost: false,
             isSelf: true,
             isBuffering: false,
@@ -1159,7 +1201,7 @@ export function useWatchParty() {
         }
       }
     },
-    [userName, addSystemNotice]
+    [addSystemNotice]
   )
 
   const startHostReconnectGracePeriod = useCallback(() => {
@@ -1292,7 +1334,14 @@ export function useWatchParty() {
 
     const unsubGuestDisconnect = peerService.onGuestDisconnected((peerId) => {
       const leftName = participantNamesRef.current[peerId] || 'A friend'
-      addSystemNotice(`${leftName} left the party.`)
+      delete participantNamesRef.current[peerId]
+
+      if (!recentlyLeftPeersRef.current.has(peerId)) {
+        recentlyLeftPeersRef.current.add(peerId)
+        setTimeout(() => recentlyLeftPeersRef.current.delete(peerId), 5000)
+        addSystemNotice(`${leftName} left the party.`)
+      }
+
       setParticipants((prev) => {
         const remaining = prev.filter((p) => p.id !== peerId)
         if (isHost) {

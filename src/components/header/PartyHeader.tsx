@@ -1,5 +1,7 @@
 import React from 'react'
-import { Share2, Film, UserCheck, Shield, Tv, LogOut } from 'lucide-react'
+import { Share2, Film, UserCheck, Shield, Tv, LogOut, Heart } from 'lucide-react'
+
+const SUPPORT_SMARTLINK_URL = 'https://directyp.org/4/aeb051115f4be77122a44707db1760a1'
 
 interface PartyHeaderProps {
   roomTitle: string
@@ -96,11 +98,11 @@ export const PartyHeader: React.FC<PartyHeaderProps> = ({
           <span className="hide-on-mobile">{userName}</span>
         </button>
 
-        {/* Theater / Cinema Mode Toggle (Desktop only) */}
+        {/* Theater / Cinema Mode Toggle */}
         {onToggleTheaterMode && (
           <button
             onClick={onToggleTheaterMode}
-            className={`btn-action hide-on-mobile ${isTheaterMode ? 'active' : ''}`}
+            className={`btn-action ${isTheaterMode ? 'active' : ''}`}
             style={{
               background: isTheaterMode ? 'rgba(139, 92, 246, 0.25)' : undefined,
               borderColor: isTheaterMode ? 'var(--accent-purple)' : undefined,
@@ -121,6 +123,24 @@ export const PartyHeader: React.FC<PartyHeaderProps> = ({
             <Film size={15} />
           </button>
         )}
+
+        {/* Support Us (Adsterra Smartlink) */}
+        <a
+          href={SUPPORT_SMARTLINK_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn-action"
+          style={{
+            textDecoration: 'none',
+            background: 'rgba(236, 72, 153, 0.12)',
+            borderColor: 'rgba(236, 72, 153, 0.35)',
+            color: '#f472b6',
+          }}
+          title="Support DekhoPrime Watch Party"
+        >
+          <Heart size={14} fill="currentColor" />
+          <span className="hide-on-mobile">Support Us</span>
+        </a>
 
         {/* Invite Friends Button */}
         <button onClick={onOpenInvite} className="btn-action btn-primary">
