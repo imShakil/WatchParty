@@ -1,6 +1,5 @@
 import React from 'react'
-import { Share2, Film, UserCheck, Shield, Tv, LogOut, Heart } from 'lucide-react'
-import { SMARTLINK_URL } from '@/components/ads/PartyAds'
+import { Share2, Film, UserCheck, Shield, Tv, LogOut } from 'lucide-react'
 
 interface PartyHeaderProps {
   roomTitle: string
@@ -60,9 +59,9 @@ export const PartyHeader: React.FC<PartyHeaderProps> = ({
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', minWidth: 0 }}>
                 <span
                   style={{
-                    fontSize: '0.85rem',
+                    fontSize: '0.88rem',
                     fontWeight: 700,
-                    maxWidth: '120px',
+                    maxWidth: 'clamp(110px, 32vw, 280px)',
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
@@ -72,27 +71,10 @@ export const PartyHeader: React.FC<PartyHeaderProps> = ({
                 >
                   {roomTitle || 'Live Watch Room'}
                 </span>
-                <span
-                  style={{
-                    fontSize: '0.65rem',
-                    fontFamily: 'monospace',
-                    fontWeight: 600,
-                    padding: '0.1rem 0.35rem',
-                    borderRadius: 'var(--radius-sm)',
-                    background: 'rgba(139, 92, 246, 0.15)',
-                    border: '1px solid rgba(139, 92, 246, 0.3)',
-                    color: '#c4b5fd',
-                    whiteSpace: 'nowrap',
-                    flexShrink: 0,
-                  }}
-                  title={`Room ID: ${roomId}`}
-                >
-                  #{roomId}
-                </span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <div className="hide-on-xs" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                 <span className={`status-dot ${isPeerBuffering ? 'buffering' : ''}`} />
-                <span className="hide-on-xs" style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
                   {isPeerBuffering ? `${bufferingPeerName || 'Friend'} buffering...` : 'Synced & Live'}
                 </span>
               </div>
@@ -139,24 +121,6 @@ export const PartyHeader: React.FC<PartyHeaderProps> = ({
             <Film size={15} />
           </button>
         )}
-
-        {/* Support Us (Smartlink) */}
-        <a
-          href={SMARTLINK_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn-action"
-          style={{
-            textDecoration: 'none',
-            background: 'rgba(236, 72, 153, 0.12)',
-            borderColor: 'rgba(236, 72, 153, 0.35)',
-            color: '#f472b6',
-          }}
-          title="Support DekhoPrime Watch Party"
-        >
-          <Heart size={14} fill="currentColor" />
-          <span className="hide-on-mobile">Support Us</span>
-        </a>
 
         {/* Invite Friends Button */}
         <button onClick={onOpenInvite} className="btn-action btn-primary">

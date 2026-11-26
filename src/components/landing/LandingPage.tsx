@@ -30,7 +30,6 @@ import {
 import { clearHostSession } from '@/utils/sessionUtils'
 import { useRoomIdEligibility } from '@/hooks/useRoomIdEligibility'
 import { sanitizeRoomIdInput } from '@/utils/roomValidation'
-import { PartyNativeBanner, PartyLandingPopunder } from '@/components/ads/PartyAds'
 
 interface LandingPageProps {
   userName: string
@@ -211,7 +210,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         position: 'relative',
       }}
     >
-      <PartyLandingPopunder />
       {/* Top Navbar */}
       <nav className="landing-nav">
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -302,13 +300,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   display: 'flex',
                   alignItems: 'center',
                   gap: '0.4rem',
-                  fontSize: '0.8rem',
+                  fontSize: '0.78rem',
+                  padding: '0.4rem 0.75rem',
+                  whiteSpace: 'nowrap',
                   background: 'rgba(255, 255, 255, 0.06)',
                   border: '1px solid rgba(255, 255, 255, 0.15)',
                   color: '#fff',
                 }}
               >
-                <span>Sign in with Google</span>
+                <span>Sign in</span>
+                <span className="hide-on-xs">with Google</span>
               </button>
             )
           )}
@@ -974,9 +975,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           zIndex: 1,
         }}
       >
-        {/* Native Sponsored Banner */}
-        <PartyNativeBanner />
-
         <div
           style={{
             display: 'flex',
@@ -1019,6 +1017,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </div>
 
         <div
+          className="popular-movies-grid"
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
@@ -1425,32 +1424,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               © {new Date().getFullYear()}
             </span>
           </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-              Free forever • Ads cover domain &amp; hosting
-            </span>
-            <a
-              href="https://beta.publishers.adsterra.com/referral/1XU1UuDLQw"
-              target="_blank"
-              rel="nofollow noopener noreferrer"
-              style={{
-                display: 'inline-block',
-                borderRadius: '4px',
-                overflow: 'hidden',
-                border: '1px solid rgba(255, 255, 255, 0.12)',
-                flexShrink: 0,
-              }}
-            >
-              <img
-                alt="Adsterra"
-                src="https://landings-cdn.adsterratech.com/referralBanners/gif/120x60_adsterra_reff.gif"
-                width={96}
-                height={48}
-                style={{ display: 'block', objectFit: 'cover' }}
-              />
-            </a>
-          </div>
+          <span style={{ fontSize: '0.74rem', color: 'var(--text-dim)' }}>
+            Real-time synchronized watch party
+          </span>
         </div>
       </footer>
     </div>

@@ -523,12 +523,22 @@ export function useWatchParty() {
 
         case 'SYNC_STATE': {
           if (isHost) break // only guests sync with host heartbeat
-          const { isPlaying, currentTime } = packet.payload as SyncPayload
+          const { isPlaying, currentTime, playlistIndex } = packet.payload as SyncPayload
           setHostSyncTime(currentTime)
           if (isEmbedRoomRef.current) {
             setEmbedClockRunning(isPlaying)
             break
           }
+
+          if (
+            typeof playlistIndex === 'number' &&
+            playerControllerRef.current?.playVideoAt &&
+            playerControllerRef.current?.getPlaylistIndex &&
+            playerControllerRef.current.getPlaylistIndex() !== playlistIndex
+          ) {
+            playerControllerRef.current.playVideoAt(playlistIndex)
+          }
+
           const curTime = getCurrentPlaybackTime()
           const isCurPlaying = getIsPlayingState()
           const drift = Math.abs(curTime - currentTime)
@@ -582,6 +592,15 @@ export function useWatchParty() {
             setRemoteStream(null)
           }
           addSystemNotice(`Host loaded a new stream: ${meta.roomTitle || 'Media'}`)
+          break
+        }
+
+        case 'PLAYLIST_SELECT': {
+          const { index, senderName } = packet.payload as { index: number; senderName?: string }
+          if (typeof index === 'number' && playerControllerRef.current?.playVideoAt) {
+            playerControllerRef.current.playVideoAt(index)
+            addSystemNotice(`${senderName || 'Host'} switched to playlist track #${index + 1}`)
+          }
           break
         }
 
@@ -1374,6 +1393,7 @@ export function useWatchParty() {
             isPlaying: curPlaying,
             currentTime: curTime,
             playbackRate: 1.0,
+            playlistIndex: playerControllerRef.current?.getPlaylistIndex?.(),
             timestamp: now,
           } as SyncPayload,
         })
@@ -1382,6 +1402,21 @@ export function useWatchParty() {
 
     return () => clearInterval(interval)
   }, [isHost, connectionStatus, userName, getCurrentPlaybackTime, getIsPlayingState])
+
+  const selectPlaylistTrack = useCallback(
+    (index: number) => {
+      if (roomMetadata.isHostOnlyControl && !isHost) return
+      if (index < 0) return
+      playerControllerRef.current?.playVideoAt?.(index)
+      peerService.send({
+        type: 'PLAYLIST_SELECT',
+        senderId: peerService.myPeerId,
+        senderName: userName,
+        payload: { index, senderName: userName },
+      })
+    },
+    [isHost, roomMetadata.isHostOnlyControl, userName]
+  )
 
   const terminateRoom = useCallback(() => {
     isIntentionalExit.current = true
@@ -1769,6 +1804,7 @@ export function useWatchParty() {
     handlePlayerSeek,
     handleBuffering,
     changeStream,
+    selectPlaylistTrack,
     toggleHostOnlyControl,
     startHost,
     joinRoom,

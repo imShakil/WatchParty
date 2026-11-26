@@ -8,8 +8,56 @@ export interface ParsedMedia {
   isEmbed: boolean
   isYouTube: boolean
   youtubeId?: string
+  youtubePlaylistId?: string
+  youtubePlaylistIndex?: number
   mediaType: MediaType
   title?: string
+}
+
+function extractYouTubeParams(rawUrl: string): {
+  videoId?: string
+  playlistId?: string
+  playlistIndex?: number
+} | null {
+  const ytVideoMatch = rawUrl.match(
+    /(?:youtu\.be\/|(?:www\.|m\.|music\.)?youtube(?:-nocookie)?\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/|live\/))([\w-]{11})/
+  )
+  const videoId = ytVideoMatch?.[1]
+
+  let playlistId: string | undefined
+  let playlistIndex: number | undefined
+  let isYouTubeHost = Boolean(videoId)
+
+  try {
+    const parsed = new URL(rawUrl)
+    const host = parsed.hostname.toLowerCase()
+    if (
+      host === 'youtu.be' ||
+      host.endsWith('youtube.com') ||
+      host.endsWith('youtube-nocookie.com')
+    ) {
+      isYouTubeHost = true
+      const listParam = parsed.searchParams.get('list')?.trim()
+      if (listParam && /^[\w-]+$/.test(listParam) && listParam.length >= 10) {
+        playlistId = listParam
+      }
+      const indexParam = parsed.searchParams.get('index')
+      if (indexParam) {
+        const idx = Number.parseInt(indexParam, 10)
+        if (!Number.isNaN(idx) && idx > 0) {
+          playlistIndex = idx - 1
+        }
+      }
+    }
+  } catch {
+    // Non-URL input
+  }
+
+  if (!isYouTubeHost || (!videoId && !playlistId)) {
+    return null
+  }
+
+  return { videoId, playlistId, playlistIndex }
 }
 
 export function parseMediaUrl(
@@ -39,20 +87,25 @@ export function parseMediaUrl(
     }
   }
 
-  // 1. YouTube Detection (matches youtube.com, youtube-nocookie.com, youtu.be, embed, shorts, etc.)
-  const ytMatch = url.match(
-    /(?:youtu\.be\/|(?:www\.|m\.|music\.)?youtube(?:-nocookie)?\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/|live\/))([\w-]{11})/
-  )
+  // 1. YouTube Detection (videos, shorts, live, and playlists)
+  const ytParams = extractYouTubeParams(url)
+  if (ytParams) {
+    const { videoId, playlistId, playlistIndex } = ytParams
+    const normalizedUrl = playlistId
+      ? videoId
+        ? `https://www.youtube-nocookie.com/embed/${videoId}?list=${encodeURIComponent(playlistId)}&autoplay=1&playsinline=1&rel=0&enablejsapi=1`
+        : `https://www.youtube-nocookie.com/embed/videoseries?list=${encodeURIComponent(playlistId)}&autoplay=1&playsinline=1&rel=0&enablejsapi=1`
+      : `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&playsinline=1&rel=0&enablejsapi=1`
 
-  if (ytMatch && ytMatch[1]) {
-    const videoId = ytMatch[1]
     return {
-      normalizedUrl: `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&playsinline=1&rel=0&enablejsapi=1`,
+      normalizedUrl,
       isEmbed: false,
       isYouTube: true,
       youtubeId: videoId,
+      youtubePlaylistId: playlistId,
+      youtubePlaylistIndex: playlistIndex,
       mediaType: 'youtube',
-      title: defaultTitle || 'YouTube Video',
+      title: defaultTitle || (playlistId ? 'YouTube Playlist' : 'YouTube Video'),
     }
   }
 

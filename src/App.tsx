@@ -15,7 +15,6 @@ import { LandingPage } from '@/components/landing/LandingPage'
 import { parseCurrentRoute, syncRoomUrl, cleanSensitiveUrlParams } from '@/utils/routeUtils'
 import { getHostSession } from '@/utils/sessionUtils'
 import { checkPartyRoomStatus, consumeLaunchToken } from '@/services/firebaseService'
-import { PartySocialBar, PartyPlayerCornerAd } from '@/components/ads/PartyAds'
 
 export function App() {
   const { user, signIn, logOut } = usePartyAuth()
@@ -72,6 +71,7 @@ export function App() {
     handlePlayerSeek,
     handleBuffering,
     changeStream,
+    selectPlaylistTrack,
     toggleHostOnlyControl,
     startHost,
     joinRoom,
@@ -215,7 +215,6 @@ export function App() {
   if (isLandingView) {
     return (
       <>
-        <PartySocialBar />
         <LandingPage
           userName={userName}
           user={user}
@@ -250,7 +249,6 @@ export function App() {
 
   return (
     <div className="app-container">
-      <PartySocialBar />
       {/* Top Header */}
       <PartyHeader
         roomTitle={roomMetadata.roomTitle}
@@ -295,13 +293,34 @@ export function App() {
             onPause={handlePlayerPause}
             onSeek={handlePlayerSeek}
             onBuffering={handleBuffering}
+            onSelectPlaylistTrack={selectPlaylistTrack}
           />
+
+          {/* Subtle Room ID Watermark */}
+          {roomId && (
+            <div
+              aria-hidden="true"
+              style={{
+                position: 'absolute',
+                bottom: '3.25rem',
+                left: '0.85rem',
+                zIndex: 18,
+                pointerEvents: 'none',
+                userSelect: 'none',
+                fontSize: '0.7rem',
+                fontFamily: 'monospace',
+                fontWeight: 600,
+                letterSpacing: '0.04em',
+                color: 'rgba(255, 255, 255, 0.28)',
+                textShadow: '0 1px 4px rgba(0, 0, 0, 0.85)',
+              }}
+            >
+              #{roomId}
+            </div>
+          )}
 
           {/* Floating Emoji Reactions Layer */}
           <FloatingReactions reactions={reactions} />
-
-          {/* Timed 15s Corner Ad Overlay */}
-          <PartyPlayerCornerAd isActive={connectionStatus === 'connected'} />
 
           {/* Host Reconnecting Grace Period Banner */}
           {isHostReconnecting && (

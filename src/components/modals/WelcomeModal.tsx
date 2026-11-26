@@ -78,23 +78,10 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({
         justifyContent: 'center',
         background: 'rgba(5, 6, 9, 0.88)',
         backdropFilter: 'blur(12px)',
-        padding: '1.5rem',
+        padding: '0.85rem',
       }}
     >
-      <div
-        style={{
-          width: '100%',
-          maxWidth: '560px',
-          background: 'var(--bg-surface)',
-          borderRadius: 'var(--radius-lg)',
-          border: '1px solid var(--border-subtle)',
-          boxShadow: 'var(--shadow-glass)',
-          padding: '2rem',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '1.5rem',
-        }}
-      >
+      <div className="welcome-modal-card">
         {/* Brand Banner */}
         <div style={{ textAlign: 'center' }}>
           <div
@@ -208,7 +195,7 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({
           </div>
         ) : (
           /* Host or Join choices */
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div className="welcome-modal-grid">
             {/* Create Room Box */}
             <div
               style={{

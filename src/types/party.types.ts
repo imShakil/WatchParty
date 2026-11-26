@@ -17,6 +17,7 @@ export type PartyMessageType =
   | 'ROOM_CLOSED'
   | 'TYPING_STATUS'
   | 'PEER_LEFT'
+  | 'PLAYLIST_SELECT'
 
 export interface JoinRejectedPayload {
   reason: 'ROOM_FULL' | 'ROOM_LOCKED' | 'WRONG_PASSCODE'
@@ -30,6 +31,7 @@ export interface SyncPayload {
   isPlaying: boolean
   currentTime: number
   playbackRate?: number
+  playlistIndex?: number
   timestamp: number
 }
 

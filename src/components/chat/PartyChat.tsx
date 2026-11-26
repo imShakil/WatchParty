@@ -160,6 +160,7 @@ export const PartyChat: React.FC<PartyChatProps> = ({
       <div
         style={{
           display: 'flex',
+          flexShrink: 0,
           borderBottom: '1px solid var(--border-subtle)',
           background: 'rgba(0, 0, 0, 0.2)',
         }}
@@ -228,7 +229,18 @@ export const PartyChat: React.FC<PartyChatProps> = ({
 
       {/* People Tab Content */}
       {activeTab === 'people' && (
-        <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: 'auto',
+            overscrollBehaviorY: 'contain',
+            padding: '1rem',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.85rem',
+          }}
+        >
           {/* Host Controls Section */}
           {isHost && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
@@ -719,7 +731,9 @@ export const PartyChat: React.FC<PartyChatProps> = ({
           <div
             style={{
               flex: 1,
+              minHeight: 0,
               overflowY: 'auto',
+              overscrollBehaviorY: 'contain',
               padding: '1rem',
               display: 'flex',
               flexDirection: 'column',
@@ -899,6 +913,8 @@ export const PartyChat: React.FC<PartyChatProps> = ({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-around',
+              flexShrink: 0,
+              overflowX: 'auto',
             }}
           >
             {REACTION_EMOJIS.map((emoji) => (

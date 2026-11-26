@@ -344,7 +344,7 @@ export async function getUserPermanentRooms(uid: string): Promise<PermanentRoomS
 }
 
 /**
- * Remove a permanent room from the user's saved list and free up its Room ID.
+ * Remove a permanent room from the user's saved list and delete its Firestore record.
  */
 export async function removePermanentRoom(roomId: string): Promise<void> {
   const { firestore } = getFirebase()
@@ -352,14 +352,20 @@ export async function removePermanentRoom(roomId: string): Promise<void> {
 
   try {
     const roomRef = doc(firestore, 'party_rooms', roomId)
-    await updateDoc(roomRef, {
-      isPermanent: false,
-      status: 'ended',
-      ownerUid: null,
-      lastActiveAt: serverTimestamp(),
-    })
+    await deleteDoc(roomRef)
   } catch {
-    // Non-fatal
+    // Fallback if delete rule is restricted
+    try {
+      const roomRef = doc(firestore, 'party_rooms', roomId)
+      await updateDoc(roomRef, {
+        isPermanent: false,
+        status: 'ended',
+        ownerUid: null,
+        lastActiveAt: serverTimestamp(),
+      })
+    } catch {
+      // Non-fatal
+    }
   }
 }
 
@@ -471,8 +477,11 @@ export async function checkPartyRoomStatus(roomId: string): Promise<{
   }
 }
 
+const ENDED_ROOM_RETENTION_MS = 24 * 60 * 60 * 1000 // Delete ended temporary rooms after 24 hours
+
 /**
- * Cleanup stale rooms that were abruptly closed without calling endPartyRoom
+ * Cleanup stale rooms that were abruptly closed without calling endPartyRoom,
+ * and delete ended non-permanent rooms older than 1 hour.
  */
 export async function cleanupStalePartyRooms(): Promise<void> {
   const { firestore } = getFirebase()
@@ -480,11 +489,12 @@ export async function cleanupStalePartyRooms(): Promise<void> {
 
   try {
     const roomsCol = collection(firestore, 'party_rooms')
-    const activeQuery = query(roomsCol, where('status', '==', 'active'))
-    const snap = await getDocs(activeQuery)
     const now = Date.now()
 
-    snap.forEach((docSnap) => {
+    const activeQuery = query(roomsCol, where('status', '==', 'active'))
+    const activeSnap = await getDocs(activeQuery)
+
+    activeSnap.forEach((docSnap) => {
       const data = docSnap.data()
       const lastActive =
         data.lastActiveAt?.toMillis?.() || data.createdAt?.toMillis?.() || 0
@@ -500,6 +510,22 @@ export async function cleanupStalePartyRooms(): Promise<void> {
             endedAt: serverTimestamp(),
           }).catch(() => {})
         }
+      }
+    })
+
+    const endedQuery = query(roomsCol, where('status', '==', 'ended'))
+    const endedSnap = await getDocs(endedQuery)
+
+    endedSnap.forEach((docSnap) => {
+      const data = docSnap.data()
+      if (data.isPermanent) return
+      const endedAt =
+        data.endedAt?.toMillis?.() ||
+        data.lastActiveAt?.toMillis?.() ||
+        data.createdAt?.toMillis?.() ||
+        0
+      if (now - endedAt > ENDED_ROOM_RETENTION_MS) {
+        void deleteDoc(docSnap.ref).catch(() => {})
       }
     })
   } catch {

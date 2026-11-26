@@ -11,6 +11,10 @@ export interface UnifiedPlayerRef {
   isPlaying: () => boolean
   setVolume: (volume: number) => void
   setMuted: (muted: boolean) => void
+  playVideoAt?: (index: number) => void
+  nextVideo?: () => void
+  previousVideo?: () => void
+  getPlaylistIndex?: () => number
 }
 
 export interface YouTubePlayerInstance {
@@ -27,6 +31,23 @@ export interface YouTubePlayerInstance {
   setPlaybackRate(rate: number): void
   loadVideoById(videoId: string): void
   cueVideoById?(videoId: string): void
+  loadPlaylist?(
+    playlist:
+      | string
+      | string[]
+      | {
+          list: string
+          listType?: 'playlist' | 'user_uploads'
+          index?: number
+          startSeconds?: number
+        }
+  ): void
+  nextVideo?(): void
+  previousVideo?(): void
+  playVideoAt?(index: number): void
+  getPlaylist?(): string[]
+  getPlaylistIndex?(): number
+  getVideoData?(): { video_id?: string; title?: string; author?: string }
   destroy(): void
 }
 
