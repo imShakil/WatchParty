@@ -167,9 +167,9 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({
           <div
             style={{
               padding: '1.25rem',
-              background: 'rgba(139, 92, 246, 0.12)',
+              background: 'rgba(234, 56, 62, 0.12)',
               borderRadius: 'var(--radius-md)',
-              border: '1px solid rgba(139, 92, 246, 0.3)',
+              border: '1px solid rgba(234, 56, 62, 0.3)',
               display: 'flex',
               flexDirection: 'column',
               gap: '1rem',
@@ -177,7 +177,7 @@ export const WelcomeModal: React.FC<WelcomeModalProps> = ({
             }}
           >
             <div>
-              <span style={{ fontSize: '0.8rem', color: '#c4b5fd', fontWeight: 600 }}>
+              <span style={{ fontSize: '0.8rem', color: '#fda4af', fontWeight: 600 }}>
                 You were invited to Room:
               </span>
               <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fff', fontFamily: 'monospace', marginTop: '0.25rem' }}>

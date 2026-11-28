@@ -7,6 +7,8 @@ import { VimeoPlayer } from '@/components/player/VimeoPlayer'
 import { TwitchPlayer } from '@/components/player/TwitchPlayer'
 import { DailymotionPlayer } from '@/components/player/DailymotionPlayer'
 import { SoundCloudPlayer } from '@/components/player/SoundCloudPlayer'
+import { CountdownPlayer } from '@/components/player/CountdownPlayer'
+import { isCountdownStreamUrl } from '@/utils/countdownStream'
 import {
   fetchYouTubePlaylist,
   buildFallbackPlaylistItems,
@@ -60,6 +62,7 @@ interface PartyPlayerProps {
   onSeek: (time: number) => void
   onBuffering: (buffering: boolean) => void
   onSelectPlaylistTrack?: (index: number) => void
+  onCountdownComplete?: (nextUrl: string, nextTitle?: string) => void
 }
 
 function formatTime(seconds: number): string {
@@ -98,6 +101,7 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
   onSeek,
   onBuffering,
   onSelectPlaylistTrack,
+  onCountdownComplete,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [isPlaying, setIsPlaying] = useState<boolean>(false)
@@ -858,7 +862,7 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
                   type="button"
                   onClick={() => setIsPlaylistOpen((prev) => !prev)}
                   style={{
-                    background: isPlaylistOpen ? 'rgba(139, 92, 246, 0.28)' : 'transparent',
+                    background: isPlaylistOpen ? 'rgba(234, 56, 62, 0.28)' : 'transparent',
                     border: 'none',
                     color: '#fff',
                     cursor: 'pointer',
@@ -872,7 +876,7 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
                   }}
                   title="Toggle Playlist Queue"
                 >
-                  <ListVideo size={14} color="#c084fc" />
+                  <ListVideo size={14} color="#fb7185" />
                   <span>
                     {playlistItems.length > 0
                       ? `${currentPlaylistIdx + 1}/${playlistItems.length}`
@@ -941,7 +945,7 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                      <ListVideo size={15} color="#c084fc" />
+                      <ListVideo size={15} color="#fb7185" />
                       <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#fff' }}>
                         Playlist ({playlistItems.length})
                       </span>
@@ -1017,10 +1021,10 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
                               padding: '0.4rem',
                               borderRadius: '8px',
                               border: isActive
-                                ? '1px solid rgba(139, 92, 246, 0.55)'
+                                ? '1px solid rgba(234, 56, 62, 0.55)'
                                 : '1px solid transparent',
                               background: isActive
-                                ? 'rgba(139, 92, 246, 0.18)'
+                                ? 'rgba(234, 56, 62, 0.18)'
                                 : 'rgba(255, 255, 255, 0.03)',
                               color: '#fff',
                               textAlign: 'left',
@@ -1032,7 +1036,7 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
                               style={{
                                 fontSize: '0.7rem',
                                 fontWeight: 700,
-                                color: isActive ? '#c084fc' : 'var(--text-dim)',
+                                color: isActive ? '#fb7185' : 'var(--text-dim)',
                                 minWidth: '18px',
                                 textAlign: 'center',
                               }}
@@ -1143,6 +1147,12 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
           />
           {!canControl && <div style={{ position: 'absolute', inset: 0, zIndex: 12 }} />}
         </div>
+      ) : isCountdownStreamUrl(streamUrl) ? (
+        <CountdownPlayer
+          streamUrl={streamUrl}
+          isHost={isHost}
+          onCountdownComplete={onCountdownComplete}
+        />
       ) : isTabShareHost ? (
         localTabStream ? (
           <div style={{ width: '100%', height: '100%', position: 'relative', background: '#000' }}>
@@ -1166,7 +1176,7 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
                 borderRadius: '999px',
                 background: 'rgba(10, 12, 18, 0.85)',
                 backdropFilter: 'blur(10px)',
-                border: '1px solid rgba(139, 92, 246, 0.35)',
+                border: '1px solid rgba(234, 56, 62, 0.35)',
                 boxShadow: '0 6px 20px rgba(0, 0, 0, 0.5)',
               }}
             >
@@ -1226,14 +1236,14 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
               width: '64px',
               height: '64px',
               borderRadius: '50%',
-              background: 'rgba(139, 92, 246, 0.16)',
-              border: '1px solid rgba(139, 92, 246, 0.4)',
+              background: 'rgba(234, 56, 62, 0.16)',
+              border: '1px solid rgba(234, 56, 62, 0.4)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <MonitorUp size={28} color="#c084fc" />
+            <MonitorUp size={28} color="#fb7185" />
           </div>
           <div>
             <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '0.35rem', color: '#fff' }}>
@@ -1416,7 +1426,7 @@ export const PartyPlayer: React.FC<PartyPlayerProps> = ({
                         style={{
                           background: isSynced
                             ? 'rgba(34, 197, 94, 0.2)'
-                            : 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
+                            : 'linear-gradient(135deg, #ea383e, #e11d48)',
                           border: isSynced ? '1px solid rgba(74, 222, 128, 0.45)' : 'none',
                           borderRadius: '999px',
                           color: isSynced ? '#4ade80' : '#fff',

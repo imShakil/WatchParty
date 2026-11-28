@@ -77,7 +77,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
                 width: '40px',
                 height: '40px',
                 borderRadius: '10px',
-                background: isDestructive ? 'rgba(239, 68, 68, 0.18)' : 'rgba(139, 92, 246, 0.18)',
+                background: isDestructive ? 'rgba(239, 68, 68, 0.18)' : 'rgba(234, 56, 62, 0.18)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -154,12 +154,12 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
               borderRadius: 'var(--radius-md, 8px)',
               background: isDestructive
                 ? 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)'
-                : 'linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%)',
-              border: isDestructive ? '1px solid #ef4444' : '1px solid #8b5cf6',
+                : 'linear-gradient(135deg, #e11d48 0%, #ea383e 100%)',
+              border: isDestructive ? '1px solid #ef4444' : '1px solid #ea383e',
               color: '#ffffff',
               boxShadow: isDestructive
                 ? '0 4px 14px rgba(239, 68, 68, 0.4)'
-                : '0 4px 14px rgba(139, 92, 246, 0.4)',
+                : '0 4px 14px rgba(234, 56, 62, 0.4)',
             }}
           >
             {confirmText}

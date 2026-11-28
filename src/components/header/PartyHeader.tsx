@@ -104,7 +104,7 @@ export const PartyHeader: React.FC<PartyHeaderProps> = ({
             onClick={onToggleTheaterMode}
             className={`btn-action ${isTheaterMode ? 'active' : ''}`}
             style={{
-              background: isTheaterMode ? 'rgba(139, 92, 246, 0.25)' : undefined,
+              background: isTheaterMode ? 'rgba(234, 56, 62, 0.25)' : undefined,
               borderColor: isTheaterMode ? 'var(--accent-purple)' : undefined,
             }}
             title={isTheaterMode ? 'Exit Cinema Mode' : 'Cinema Mode (Wide Screen)'}

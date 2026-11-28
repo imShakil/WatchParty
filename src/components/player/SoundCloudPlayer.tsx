@@ -127,7 +127,7 @@ export const SoundCloudPlayer: React.FC<SoundCloudPlayerProps> = ({
     }
   }, [trackUrl])
 
-  const widgetSrc = `https://w.soundcloud.com/player/?url=${encodeURIComponent(trackUrl)}&color=%238b5cf6&auto_play=true&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false&visual=true`
+  const widgetSrc = `https://w.soundcloud.com/player/?url=${encodeURIComponent(trackUrl)}&color=%23ea383e&auto_play=true&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false&visual=true`
 
   return (
     <iframe

@@ -617,7 +617,7 @@ export const MediaAttachmentModal: React.FC<MediaAttachmentModalProps> = ({
                     width: '48px',
                     height: '48px',
                     borderRadius: '50%',
-                    background: 'rgba(139, 92, 246, 0.18)',
+                    background: 'rgba(234, 56, 62, 0.18)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',

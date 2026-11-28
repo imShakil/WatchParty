@@ -109,8 +109,8 @@ export const VoiceNotePlayer: React.FC<VoiceNotePlayerProps> = ({
           height: '32px',
           borderRadius: '50%',
           border: 'none',
-          background: isSenderMe ? '#ffffff' : 'var(--accent-purple, #8b5cf6)',
-          color: isSenderMe ? '#7c3aed' : '#ffffff',
+          background: isSenderMe ? '#ffffff' : 'var(--accent-purple, #ea383e)',
+          color: isSenderMe ? '#e11d48' : '#ffffff',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -140,7 +140,7 @@ export const VoiceNotePlayer: React.FC<VoiceNotePlayerProps> = ({
             style={{
               height: '100%',
               width: `${progressPercent}%`,
-              background: isSenderMe ? '#ffffff' : 'var(--accent-purple, #8b5cf6)',
+              background: isSenderMe ? '#ffffff' : 'var(--accent-purple, #ea383e)',
               borderRadius: '999px',
               transition: 'width 0.1s linear',
             }}

@@ -351,6 +351,9 @@ export function App() {
             onSeek={handlePlayerSeek}
             onBuffering={handleBuffering}
             onSelectPlaylistTrack={selectPlaylistTrack}
+            onCountdownComplete={(nextUrl, nextTitle) =>
+              changeStream(nextUrl, nextTitle || 'Watch Party Stream', undefined, false)
+            }
           />
 
           {/* Subtle Room ID Watermark */}

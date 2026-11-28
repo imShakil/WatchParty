@@ -164,7 +164,7 @@ export const RoomExpiredModal: React.FC<RoomExpiredModalProps> = ({
               ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(245, 158, 11, 0.15))'
               : isRoomLocked
               ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(185, 28, 28, 0.15))'
-              : 'linear-gradient(135deg, rgba(234, 56, 62, 0.2), rgba(139, 92, 246, 0.15))',
+              : 'linear-gradient(135deg, rgba(234, 56, 62, 0.2), rgba(234, 56, 62, 0.15))',
             border: isStandby
               ? '1px solid rgba(251, 191, 36, 0.45)'
               : isWrongPasscode
@@ -191,7 +191,7 @@ export const RoomExpiredModal: React.FC<RoomExpiredModalProps> = ({
           {isStandby ? (
             <Pin size={30} color="#fbbf24" />
           ) : isWrongPasscode ? (
-            <KeyRound size={32} color="#c084fc" />
+            <KeyRound size={32} color="#fb7185" />
           ) : isRoomFull ? (
             <Users size={32} color="#fbbf24" />
           ) : isRoomLocked ? (
@@ -234,7 +234,7 @@ export const RoomExpiredModal: React.FC<RoomExpiredModalProps> = ({
             color: isStandby
               ? '#fbbf24'
               : isWrongPasscode
-              ? '#c084fc'
+              ? '#fb7185'
               : isRoomFull
               ? '#fbbf24'
               : isRoomLocked
@@ -315,8 +315,8 @@ export const RoomExpiredModal: React.FC<RoomExpiredModalProps> = ({
               width: '100%',
               padding: '0.75rem 1rem',
               borderRadius: 'var(--radius-md, 8px)',
-              background: 'rgba(139, 92, 246, 0.14)',
-              border: '1px solid rgba(139, 92, 246, 0.35)',
+              background: 'rgba(234, 56, 62, 0.14)',
+              border: '1px solid rgba(234, 56, 62, 0.35)',
               color: '#ddd6fe',
               fontSize: '0.82rem',
               fontWeight: 600,
@@ -389,7 +389,7 @@ export const RoomExpiredModal: React.FC<RoomExpiredModalProps> = ({
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '0.5rem',
-                background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
+                background: 'linear-gradient(135deg, #ea383e, #e11d48)',
                 border: 'none',
                 borderRadius: 'var(--radius-md, 8px)',
                 color: '#ffffff',
@@ -521,11 +521,11 @@ export const RoomExpiredModal: React.FC<RoomExpiredModalProps> = ({
                 justifyContent: 'center',
                 gap: '0.5rem',
                 background: isWaitingForHost
-                  ? 'rgba(139, 92, 246, 0.2)'
-                  : 'rgba(139, 92, 246, 0.12)',
-                border: '1px solid rgba(139, 92, 246, 0.4)',
+                  ? 'rgba(234, 56, 62, 0.2)'
+                  : 'rgba(234, 56, 62, 0.12)',
+                border: '1px solid rgba(234, 56, 62, 0.4)',
                 borderRadius: 'var(--radius-md, 8px)',
-                color: '#c4b5fd',
+                color: '#fda4af',
                 cursor: 'pointer',
               }}
             >
@@ -548,7 +548,7 @@ export const RoomExpiredModal: React.FC<RoomExpiredModalProps> = ({
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '0.5rem',
-                background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
+                background: 'linear-gradient(135deg, #ea383e, #e11d48)',
                 border: 'none',
                 borderRadius: 'var(--radius-md, 8px)',
                 color: '#ffffff',

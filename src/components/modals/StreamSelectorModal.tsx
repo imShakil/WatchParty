@@ -1,5 +1,7 @@
-import React, { useState, useRef } from 'react'
-import { X, Film, PlayCircle, Radio, Upload, Link2, HardDrive, MonitorUp } from 'lucide-react'
+import React, { useState, useRef, useEffect } from 'react'
+import { X, Film, PlayCircle, Radio, Upload, Link2, HardDrive, MonitorUp, Timer, Volume2, Square } from 'lucide-react'
+import { buildCountdownUrl, COUNTDOWN_MUSIC_PRESETS } from '@/utils/countdownStream'
+import { startCountdownMusicLoop } from '@/utils/countdownAudio'
 
 interface StreamSelectorModalProps {
   isOpen: boolean
@@ -21,11 +23,11 @@ const PRESET_STREAMS = [
     url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
     category: 'HLS Live Stream',
   },
-  {
-    title: 'Tears of Steel (HLS Demo)',
-    url: 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
-    category: 'HLS Multi-Audio',
-  },
+  // {
+  //   title: 'Tears of Steel (HLS Demo)',
+  //   url: 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
+  //   category: 'HLS Multi-Audio',
+  // },
   {
     title: 'Sintel Open Movie (MP4)',
     url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4',
@@ -41,12 +43,36 @@ export const StreamSelectorModal: React.FC<StreamSelectorModalProps> = ({
   onSaveStream,
   onStartTabShare,
 }) => {
-  const [activeTab, setActiveTab] = useState<'url' | 'local' | 'tab'>('url')
+  const [activeTab, setActiveTab] = useState<'url' | 'local' | 'tab' | 'countdown'>('url')
   const [streamUrl, setStreamUrl] = useState<string>(currentUrl)
   const [title, setTitle] = useState<string>(currentTitle)
   const [selectedFileName, setSelectedFileName] = useState<string>('')
   const [tabShareError, setTabShareError] = useState<string>('')
+  const [countdownMode, setCountdownMode] = useState<'duration' | 'datetime'>('duration')
+  const [durationMinutes, setDurationMinutes] = useState<number>(5)
+  const [durationSeconds, setDurationSeconds] = useState<number>(0)
+  const [targetDateTime, setTargetDateTime] = useState<string>(() => {
+    const d = new Date(Date.now() + 15 * 60 * 1000)
+    const offset = d.getTimezoneOffset() * 60000
+    return new Date(d.getTime() - offset).toISOString().slice(0, 16)
+  })
+  const [countdownText, setCountdownText] = useState<string>('Movie Night Starts Soon')
+  const [countdownDoneText, setCountdownDoneText] = useState<string>("It's Showtime!")
+  const [countdownChime, setCountdownChime] = useState<boolean>(true)
+  const [countdownMusicChoice, setCountdownMusicChoice] = useState<string>('preset://lofi')
+  const [countdownCustomMusicUrl, setCountdownCustomMusicUrl] = useState<string>('')
+  const [isPreviewingMusic, setIsPreviewingMusic] = useState<boolean>(false)
+  const [countdownNextUrl, setCountdownNextUrl] = useState<string>('')
+  const [countdownNextTitle, setCountdownNextTitle] = useState<string>('')
+  const [countdownError, setCountdownError] = useState<string>('')
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'countdown' || !isPreviewingMusic) return
+    if (!countdownMusicChoice.startsWith('preset://')) return
+    const stop = startCountdownMusicLoop(countdownMusicChoice)
+    return () => stop()
+  }, [isOpen, activeTab, isPreviewingMusic, countdownMusicChoice])
 
   if (!isOpen) return null
 
@@ -76,6 +102,56 @@ export const StreamSelectorModal: React.FC<StreamSelectorModalProps> = ({
   const handleApplyLocalFile = () => {
     if (!streamUrl) return
     onSaveStream(streamUrl, title || selectedFileName || 'Local Video', true)
+    onClose()
+  }
+
+  const handleApplyCountdown = (e: React.FormEvent) => {
+    e.preventDefault()
+    setCountdownError('')
+    const now = Date.now()
+    let targetMs = now
+
+    if (countdownMode === 'duration') {
+      const totalMs = Math.max(0, (Number(durationMinutes) || 0) * 60 + (Number(durationSeconds) || 0)) * 1000
+      if (totalMs < 1000) {
+        setCountdownError('Please enter a duration of at least 1 second.')
+        return
+      }
+      targetMs = now + totalMs
+    } else {
+      const parsed = new Date(targetDateTime).getTime()
+      if (!Number.isFinite(parsed) || parsed <= now) {
+        setCountdownError('Please pick a future date and time.')
+        return
+      }
+      targetMs = parsed
+    }
+
+    const headline = countdownText.trim() || 'Starting Soon'
+    const resolvedMusicUrl =
+      countdownMusicChoice === 'custom'
+        ? countdownCustomMusicUrl.trim() || undefined
+        : countdownMusicChoice || undefined
+    const selectedPreset = COUNTDOWN_MUSIC_PRESETS.find((p) => p.id === countdownMusicChoice)
+    const resolvedMusicTitle =
+      countdownMusicChoice === 'custom'
+        ? 'Custom Audio Stream'
+        : selectedPreset && selectedPreset.id
+          ? selectedPreset.label
+          : undefined
+
+    const url = buildCountdownUrl({
+      targetMs,
+      startMs: now,
+      text: headline,
+      doneText: countdownDoneText.trim() || "It's Time!",
+      chime: countdownChime,
+      musicUrl: resolvedMusicUrl,
+      musicTitle: resolvedMusicTitle,
+      nextUrl: countdownNextUrl.trim() || undefined,
+      nextTitle: countdownNextTitle.trim() || undefined,
+    })
+    onSaveStream(url, `⏳ ${headline}`, false)
     onClose()
   }
 
@@ -149,7 +225,7 @@ export const StreamSelectorModal: React.FC<StreamSelectorModalProps> = ({
             }}
           >
             <Link2 size={15} />
-            <span>Web URL / YouTube</span>
+            <span>Stream URL</span>
           </button>
           <button
             type="button"
@@ -190,6 +266,26 @@ export const StreamSelectorModal: React.FC<StreamSelectorModalProps> = ({
               <span>Share Tab</span>
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => {
+              setCountdownError('')
+              setActiveTab('countdown')
+            }}
+            className="btn-action"
+            style={{
+              flex: 1,
+              justifyContent: 'center',
+              background: activeTab === 'countdown' ? 'var(--bg-surface)' : 'transparent',
+              color: activeTab === 'countdown' ? 'var(--text-main)' : 'var(--text-dim)',
+              border: activeTab === 'countdown' ? '1px solid var(--border-subtle)' : 'none',
+              padding: '0.5rem',
+              fontSize: '0.85rem',
+            }}
+          >
+            <Timer size={15} />
+            <span>Countdown</span>
+          </button>
         </div>
 
         {activeTab === 'url' && (
@@ -207,7 +303,7 @@ export const StreamSelectorModal: React.FC<StreamSelectorModalProps> = ({
                     style={{
                       padding: '0.6rem 0.85rem',
                       borderRadius: 'var(--radius-md)',
-                      background: streamUrl === p.url ? 'rgba(139, 92, 246, 0.15)' : 'var(--bg-secondary)',
+                      background: streamUrl === p.url ? 'rgba(234, 56, 62, 0.15)' : 'var(--bg-secondary)',
                       border: streamUrl === p.url ? '1px solid var(--accent-purple)' : '1px solid var(--border-subtle)',
                       cursor: 'pointer',
                       display: 'flex',
@@ -323,7 +419,7 @@ export const StreamSelectorModal: React.FC<StreamSelectorModalProps> = ({
                   width: '48px',
                   height: '48px',
                   borderRadius: '50%',
-                  background: 'rgba(139, 92, 246, 0.15)',
+                  background: 'rgba(234, 56, 62, 0.15)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -401,7 +497,7 @@ export const StreamSelectorModal: React.FC<StreamSelectorModalProps> = ({
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div
               style={{
-                border: '1px solid rgba(139, 92, 246, 0.3)',
+                border: '1px solid rgba(234, 56, 62, 0.3)',
                 borderRadius: 'var(--radius-lg)',
                 padding: '1.75rem 1.25rem',
                 textAlign: 'center',
@@ -409,7 +505,7 @@ export const StreamSelectorModal: React.FC<StreamSelectorModalProps> = ({
                 flexDirection: 'column',
                 alignItems: 'center',
                 gap: '0.75rem',
-                background: 'rgba(139, 92, 246, 0.08)',
+                background: 'rgba(234, 56, 62, 0.08)',
               }}
             >
               <div
@@ -417,13 +513,13 @@ export const StreamSelectorModal: React.FC<StreamSelectorModalProps> = ({
                   width: '48px',
                   height: '48px',
                   borderRadius: '50%',
-                  background: 'rgba(139, 92, 246, 0.18)',
+                  background: 'rgba(234, 56, 62, 0.18)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
-                <MonitorUp size={24} color="#c084fc" />
+                <MonitorUp size={24} color="#fb7185" />
               </div>
               <div>
                 <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)' }}>
@@ -459,6 +555,322 @@ export const StreamSelectorModal: React.FC<StreamSelectorModalProps> = ({
               <span>Choose Tab &amp; Start Sharing</span>
             </button>
           </div>
+        )}
+
+        {activeTab === 'countdown' && (
+          <form onSubmit={handleApplyCountdown} style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
+            <div style={{ display: 'flex', gap: '0.4rem' }}>
+              <button
+                type="button"
+                onClick={() => setCountdownMode('duration')}
+                className="btn-action"
+                style={{
+                  flex: 1,
+                  justifyContent: 'center',
+                  padding: '0.45rem',
+                  fontSize: '0.8rem',
+                  background: countdownMode === 'duration' ? 'rgba(234, 56, 62, 0.2)' : 'var(--bg-secondary)',
+                  border: countdownMode === 'duration' ? '1px solid var(--accent-purple)' : '1px solid var(--border-subtle)',
+                  color: countdownMode === 'duration' ? '#fecdd3' : 'var(--text-dim)',
+                }}
+              >
+                Duration Timer
+              </button>
+              <button
+                type="button"
+                onClick={() => setCountdownMode('datetime')}
+                className="btn-action"
+                style={{
+                  flex: 1,
+                  justifyContent: 'center',
+                  padding: '0.45rem',
+                  fontSize: '0.8rem',
+                  background: countdownMode === 'datetime' ? 'rgba(234, 56, 62, 0.2)' : 'var(--bg-secondary)',
+                  border: countdownMode === 'datetime' ? '1px solid var(--accent-purple)' : '1px solid var(--border-subtle)',
+                  color: countdownMode === 'datetime' ? '#fecdd3' : 'var(--text-dim)',
+                }}
+              >
+                Target Date &amp; Time
+              </button>
+            </div>
+
+            {countdownMode === 'duration' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                  {[1, 5, 10, 15, 30, 60].map((mins) => (
+                    <button
+                      key={mins}
+                      type="button"
+                      onClick={() => {
+                        setDurationMinutes(mins)
+                        setDurationSeconds(0)
+                      }}
+                      style={{
+                        padding: '0.32rem 0.65rem',
+                        borderRadius: '999px',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        background: durationMinutes === mins && durationSeconds === 0 ? 'var(--accent-purple)' : 'var(--bg-secondary)',
+                        color: durationMinutes === mins && durationSeconds === 0 ? '#fff' : 'var(--text-muted)',
+                        border: '1px solid var(--border-subtle)',
+                      }}
+                    >
+                      {mins === 60 ? '1 hr' : `${mins}m`}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: '0.6rem' }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: '0.72rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.25rem' }}>
+                      Minutes
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={10080}
+                      value={durationMinutes}
+                      onChange={(e) => setDurationMinutes(Math.max(0, Number(e.target.value)))}
+                      style={{
+                        width: '100%',
+                        padding: '0.55rem 0.75rem',
+                        borderRadius: 'var(--radius-md)',
+                        background: 'var(--bg-secondary)',
+                        border: '1px solid var(--border-subtle)',
+                        color: 'var(--text-main)',
+                        fontSize: '0.85rem',
+                      }}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: '0.72rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.25rem' }}>
+                      Seconds
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={59}
+                      value={durationSeconds}
+                      onChange={(e) => setDurationSeconds(Math.min(59, Math.max(0, Number(e.target.value))))}
+                      style={{
+                        width: '100%',
+                        padding: '0.55rem 0.75rem',
+                        borderRadius: 'var(--radius-md)',
+                        background: 'var(--bg-secondary)',
+                        border: '1px solid var(--border-subtle)',
+                        color: 'var(--text-main)',
+                        fontSize: '0.85rem',
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label style={{ fontSize: '0.72rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.25rem' }}>
+                  Target Local Date &amp; Time
+                </label>
+                <input
+                  type="datetime-local"
+                  value={targetDateTime}
+                  onChange={(e) => setTargetDateTime(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.55rem 0.75rem',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-main)',
+                    fontSize: '0.85rem',
+                  }}
+                />
+              </div>
+            )}
+
+            <div>
+              <label style={{ fontSize: '0.72rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.25rem' }}>
+                Countdown Text
+              </label>
+              <input
+                type="text"
+                value={countdownText}
+                onChange={(e) => setCountdownText(e.target.value)}
+                placeholder="e.g. Movie Night Starts Soon"
+                style={{
+                  width: '100%',
+                  padding: '0.6rem 0.75rem',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'var(--bg-secondary)',
+                  border: '1px solid var(--border-subtle)',
+                  color: 'var(--text-main)',
+                  fontSize: '0.85rem',
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.6rem' }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: '0.72rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.25rem' }}>
+                  End Message
+                </label>
+                <input
+                  type="text"
+                  value={countdownDoneText}
+                  onChange={(e) => setCountdownDoneText(e.target.value)}
+                  placeholder="It's Showtime!"
+                  style={{
+                    width: '100%',
+                    padding: '0.55rem 0.75rem',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-main)',
+                    fontSize: '0.82rem',
+                  }}
+                />
+              </div>
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  fontSize: '0.78rem',
+                  color: 'var(--text-muted)',
+                  paddingTop: '1.15rem',
+                  cursor: 'pointer',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={countdownChime}
+                  onChange={(e) => setCountdownChime(e.target.checked)}
+                />
+                <span>Chime at 0</span>
+              </label>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+              <label style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>
+                Background Music (Optional)
+              </label>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <select
+                  value={countdownMusicChoice}
+                  onChange={(e) => {
+                    setCountdownMusicChoice(e.target.value)
+                    setIsPreviewingMusic(false)
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '0.58rem 0.75rem',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-main)',
+                    fontSize: '0.84rem',
+                    outline: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {COUNTDOWN_MUSIC_PRESETS.map((preset) => (
+                    <option key={preset.id || 'none'} value={preset.id}>
+                      {preset.label}
+                    </option>
+                  ))}
+                  <option value="custom">Custom Online Audio URL (MP3 / OGG / Stream)</option>
+                </select>
+                {countdownMusicChoice.startsWith('preset://') && (
+                  <button
+                    type="button"
+                    onClick={() => setIsPreviewingMusic((prev) => !prev)}
+                    title={isPreviewingMusic ? 'Stop preview' : 'Preview track'}
+                    className="btn-action"
+                    style={{
+                      padding: '0.55rem 0.75rem',
+                      fontSize: '0.78rem',
+                      background: isPreviewingMusic ? 'rgba(239, 68, 68, 0.16)' : 'var(--bg-secondary)',
+                      border: isPreviewingMusic
+                        ? '1px solid rgba(239, 68, 68, 0.45)'
+                        : '1px solid var(--border-subtle)',
+                      color: isPreviewingMusic ? '#fca5a5' : 'var(--text-main)',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {isPreviewingMusic ? <Square size={12} fill="currentColor" /> : <Volume2 size={14} />}
+                    <span>{isPreviewingMusic ? 'Stop' : 'Preview'}</span>
+                  </button>
+                )}
+              </div>
+              {countdownMusicChoice === 'custom' && (
+                <input
+                  type="url"
+                  value={countdownCustomMusicUrl}
+                  onChange={(e) => setCountdownCustomMusicUrl(e.target.value)}
+                  placeholder="https://example.com/music.mp3 (MP3, OGG, AAC)"
+                  style={{
+                    width: '100%',
+                    padding: '0.55rem 0.75rem',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-main)',
+                    fontSize: '0.82rem',
+                  }}
+                />
+              )}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+              <label style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>
+                Auto-Switch to Next Stream at 00:00 (Optional)
+              </label>
+              <input
+                type="text"
+                value={countdownNextUrl}
+                onChange={(e) => setCountdownNextUrl(e.target.value)}
+                placeholder="https://... (YouTube, HLS .m3u8, MP4)"
+                style={{
+                  width: '100%',
+                  padding: '0.55rem 0.75rem',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'var(--bg-secondary)',
+                  border: '1px solid var(--border-subtle)',
+                  color: 'var(--text-main)',
+                  fontSize: '0.82rem',
+                }}
+              />
+              {countdownNextUrl.trim() && (
+                <input
+                  type="text"
+                  value={countdownNextTitle}
+                  onChange={(e) => setCountdownNextTitle(e.target.value)}
+                  placeholder="Next Stream Title (optional)"
+                  style={{
+                    width: '100%',
+                    padding: '0.55rem 0.75rem',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-main)',
+                    fontSize: '0.82rem',
+                  }}
+                />
+              )}
+            </div>
+
+            {countdownError && (
+              <div style={{ fontSize: '0.78rem', color: '#f87171' }}>{countdownError}</div>
+            )}
+
+            <button
+              type="submit"
+              className="btn-action btn-primary"
+              style={{ width: '100%', justifyContent: 'center', padding: '0.75rem' }}
+            >
+              <Timer size={16} />
+              <span>Start Synced Countdown</span>
+            </button>
+          </form>
         )}
       </div>
     </div>

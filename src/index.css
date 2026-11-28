@@ -13,11 +13,14 @@
   --border-focus: rgba(234, 56, 62, 0.5);
 
   --primary-red: #ea383e;
+  --primary-rose: #fb7185;
+  --primary-soft: rgba(234, 56, 62, 0.14);
+  --primary-border: rgba(234, 56, 62, 0.38);
   --primary-glow: rgba(234, 56, 62, 0.4);
-  --accent-purple: #8b5cf6;
-  --accent-pink: #ec4899;
+  --accent-purple: #ea383e;
+  --accent-pink: #f43f5e;
   --accent-cyan: #06b6d4;
-  --accent-gradient: linear-gradient(135deg, #ea383e 0%, #ec4899 50%, #8b5cf6 100%);
+  --accent-gradient: linear-gradient(135deg, #ea383e 0%, #f43f5e 100%);
   --btn-primary-bg: linear-gradient(135deg, #ea383e 0%, #e11d48 100%);
   --accent-glow: rgba(234, 56, 62, 0.35);
 
@@ -793,3 +796,45 @@ body:has(.app-container) {
   }
 }
 
+
+/* 3D Countdown Stage Animations */
+@keyframes dpFloatLeft {
+  0%, 100% {
+    transform: perspective(900px) rotateY(18deg) rotateX(7deg) translateY(0px);
+  }
+  50% {
+    transform: perspective(900px) rotateY(14deg) rotateX(4deg) translateY(-10px);
+  }
+}
+
+@keyframes dpFloatRight {
+  0%, 100% {
+    transform: perspective(900px) rotateY(-18deg) rotateX(7deg) translateY(0px);
+  }
+  50% {
+    transform: perspective(900px) rotateY(-14deg) rotateX(4deg) translateY(-12px);
+  }
+}
+
+@keyframes dpShimmer {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
+}
+
+.dp-3d-card-left {
+  animation: dpFloatLeft 6.5s ease-in-out infinite;
+}
+
+.dp-3d-card-right {
+  animation: dpFloatRight 7.5s ease-in-out infinite;
+}
+
+@media (max-width: 900px) {
+  .dp-3d-side-cards {
+    display: none !important;
+  }
+}

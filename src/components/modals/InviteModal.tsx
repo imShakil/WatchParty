@@ -93,16 +93,16 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, roomId, roomTi
         <div
           style={{
             padding: '1rem',
-            background: 'rgba(139, 92, 246, 0.1)',
+            background: 'rgba(234, 56, 62, 0.1)',
             borderRadius: 'var(--radius-md)',
-            border: '1px solid rgba(139, 92, 246, 0.25)',
+            border: '1px solid rgba(234, 56, 62, 0.25)',
             display: 'flex',
             flexDirection: 'column',
             gap: '0.4rem',
             textAlign: 'center',
           }}
         >
-          <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#c4b5fd' }}>
+          <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#fda4af' }}>
             Room Code
           </span>
           <span style={{ fontSize: '1.6rem', fontWeight: 800, letterSpacing: '0.1em', color: '#fff', fontFamily: 'monospace' }}>

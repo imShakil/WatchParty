@@ -87,7 +87,7 @@ export const TheaterChatToasts: React.FC<TheaterChatToastsProps> = ({ messages }
             <span
               style={{
                 fontWeight: 700,
-                color: m.isHost ? '#c4b5fd' : '#f472b6',
+                color: m.isHost ? '#fda4af' : '#f472b6',
                 marginRight: '0.35rem',
               }}
             >

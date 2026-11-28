@@ -229,7 +229,7 @@ export const PartyChat: React.FC<PartyChatProps> = ({
           )}
           {Boolean(roomPasscode) && (
             <span title={`Passcode Protected ("${roomPasscode}")`} style={{ display: 'inline-flex', alignItems: 'center' }}>
-              <KeyRound size={12} color="#c084fc" />
+              <KeyRound size={12} color="#fb7185" />
             </span>
           )}
           {isPermanent && (
@@ -262,8 +262,8 @@ export const PartyChat: React.FC<PartyChatProps> = ({
                 style={{
                   padding: '0.75rem 0.85rem',
                   borderRadius: 'var(--radius-md)',
-                  background: 'rgba(139, 92, 246, 0.08)',
-                  border: '1px solid rgba(139, 92, 246, 0.22)',
+                  background: 'rgba(234, 56, 62, 0.08)',
+                  border: '1px solid rgba(234, 56, 62, 0.22)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
@@ -364,13 +364,13 @@ export const PartyChat: React.FC<PartyChatProps> = ({
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        color: roomPasscode ? '#c084fc' : 'var(--text-dim)',
+                        color: roomPasscode ? '#fb7185' : 'var(--text-dim)',
                       }}
                     >
                       <KeyRound size={15} />
                     </div>
                     <div>
-                      <div style={{ fontSize: '0.85rem', fontWeight: 600, color: roomPasscode ? '#c084fc' : 'var(--text-main)' }}>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600, color: roomPasscode ? '#fb7185' : 'var(--text-main)' }}>
                         Passcode Protection {roomPasscode ? `("${roomPasscode}")` : ''}
                       </div>
                       <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '2px' }}>
@@ -391,7 +391,7 @@ export const PartyChat: React.FC<PartyChatProps> = ({
                       style={{
                         background: roomPasscode ? 'rgba(168, 85, 247, 0.18)' : 'rgba(255, 255, 255, 0.08)',
                         border: '1px solid ' + (roomPasscode ? 'rgba(168, 85, 247, 0.4)' : 'rgba(255, 255, 255, 0.15)'),
-                        color: roomPasscode ? '#e9d5ff' : 'var(--text-main)',
+                        color: roomPasscode ? '#fecdd3' : 'var(--text-main)',
                         borderRadius: '6px',
                         padding: '0.3rem 0.65rem',
                         fontSize: '0.75rem',
@@ -441,7 +441,7 @@ export const PartyChat: React.FC<PartyChatProps> = ({
                       style={{
                         padding: '0.45rem 0.75rem',
                         borderRadius: '6px',
-                        background: '#7c3aed',
+                        background: '#e11d48',
                         border: 'none',
                         color: '#ffffff',
                         fontSize: '0.78rem',
@@ -723,7 +723,7 @@ export const PartyChat: React.FC<PartyChatProps> = ({
                       fontSize: '0.7rem',
                       fontWeight: 700,
                       color: '#a78bfa',
-                      background: 'rgba(139, 92, 246, 0.15)',
+                      background: 'rgba(234, 56, 62, 0.15)',
                       padding: '0.2rem 0.5rem',
                       borderRadius: 'var(--radius-full)',
                     }}
@@ -819,8 +819,8 @@ export const PartyChat: React.FC<PartyChatProps> = ({
                           fontSize: '0.65rem',
                           padding: '0 0.3rem',
                           borderRadius: '4px',
-                          background: 'rgba(139, 92, 246, 0.2)',
-                          color: '#c4b5fd',
+                          background: 'rgba(234, 56, 62, 0.2)',
+                          color: '#fda4af',
                         }}
                       >
                         Host
@@ -843,9 +843,9 @@ export const PartyChat: React.FC<PartyChatProps> = ({
                             fontWeight: 700,
                             padding: '0.05rem 0.35rem',
                             borderRadius: '4px',
-                            border: '1px solid rgba(167, 139, 250, 0.3)',
-                            background: 'rgba(139, 92, 246, 0.14)',
-                            color: '#c4b5fd',
+                            border: '1px solid rgba(251, 113, 133, 0.3)',
+                            background: 'rgba(234, 56, 62, 0.14)',
+                            color: '#fda4af',
                             cursor: 'pointer',
                           }}
                         >
@@ -1109,7 +1109,7 @@ export const PartyChat: React.FC<PartyChatProps> = ({
                         backdropFilter: 'blur(16px)',
                         border: '1px solid var(--border-subtle)',
                         borderRadius: '16px',
-                        boxShadow: '0 12px 32px rgba(0, 0, 0, 0.7), 0 0 15px rgba(139, 92, 246, 0.15)',
+                        boxShadow: '0 12px 32px rgba(0, 0, 0, 0.7), 0 0 15px rgba(234, 56, 62, 0.15)',
                         padding: '0.6rem',
                         display: 'grid',
                         gridTemplateColumns: 'repeat(6, 1fr)',
@@ -1169,7 +1169,7 @@ export const PartyChat: React.FC<PartyChatProps> = ({
                       justifyContent: 'center',
                       cursor: 'pointer',
                       flexShrink: 0,
-                      boxShadow: '0 2px 8px rgba(139, 92, 246, 0.4)',
+                      boxShadow: '0 2px 8px rgba(234, 56, 62, 0.4)',
                       transition: 'transform 0.15s',
                     }}
                     onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.06)')}
